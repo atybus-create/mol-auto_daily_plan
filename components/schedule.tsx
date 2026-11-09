@@ -12,7 +12,9 @@ type ScheduleProps = {
 
 export function Schedule({ employees, date, collapsed, editingEnabled, onBlockClick }: ScheduleProps) {
   const monday = isMonday(date);
-  const groups = Array.from(new Set(employees.map((employee) => employee.group)));
+  const preferredGroups = ["Lider / Specjalista", "Przyjęcia", "Wydanie"];
+  const groups = [...preferredGroups, ...Array.from(new Set(employees.map(employee => employee.group))).filter(group => !preferredGroups.includes(group))]
+    .filter(group => employees.some(employee => employee.group === group));
   const markers = [
     { time: "10:00", label: "Cutoff Allegro One" },
     { time: "12:00", label: monday ? "Pozostali + InPost / Orlen (pn)" : "Pozostali kurierzy" },
@@ -60,9 +62,10 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
               </div>
 
               {!collapsed && groupEmployees.map((employee) => (
-                <div className="employee-row" key={employee.id}>
+                <div className={`employee-row${employee.duty ? " on-duty" : ""}`} key={employee.id}>
                   <div className="employee-name" style={{ gridColumn: 1 }}>
-                    {employee.name}
+                    <span className="employee-name-main">{employee.name}</span>
+                    {employee.duty && <span className="duty-label" title="Dyżur zgodnie z grafikiem Google">DYŻUR</span>}
                     <small>{employee.blocks.map((block) => `${block.start}–${block.end}`).join(" · ")}</small>
                   </div>
                   {Array.from({ length: SLOT_COUNT }, (_, slot) => (
