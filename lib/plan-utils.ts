@@ -1,9 +1,16 @@
-import type { Employee, ProcessKind } from "@/types/plan";
+import type { Employee, ProcessKind, PlannerNorms } from "@/types/plan";
 
 export const SLOT_MINUTES = 5;
 export const START_MINUTES = 5 * 60;
 export const END_MINUTES = 18 * 60;
 export const SLOT_COUNT = (END_MINUTES - START_MINUTES) / SLOT_MINUTES;
+export const DEFAULT_PLANNER_NORMS: PlannerNorms = {
+  pick_per_hour: 210,
+  pack_per_hour: 70,
+  pick_seconds: 22,
+  pack_seconds: 50,
+};
+
 export const PROCESS_NORMS: Record<ProcessKind, number> = { pick: 210, pack: 70 };
 
 export const activityLabels = {
@@ -29,8 +36,9 @@ export function activityMinutes(employee: Employee, kind: ProcessKind, until = E
   }, 0);
 }
 
-export function targetFor(employee: Employee, process: ProcessKind) {
-  return Math.round((activityMinutes(employee, process) / 60) * PROCESS_NORMS[process]);
+export function targetFor(employee: Employee, process: ProcessKind, norms: PlannerNorms = DEFAULT_PLANNER_NORMS) {
+  const rate = process === "pick" ? norms.pick_per_hour : norms.pack_per_hour;
+  return Math.round((activityMinutes(employee, process) / 60) * rate);
 }
 
 export function dailyWorkedHours(employee: Employee) {
@@ -40,12 +48,14 @@ export function dailyWorkedHours(employee: Employee) {
   );
 }
 
-export function currentActual(employee: Employee, process: ProcessKind) {
-  return Math.round((activityMinutes(employee, process, 10 * 60) / 60) * PROCESS_NORMS[process] * employee.progress[process]);
+export function currentActual(employee: Employee, process: ProcessKind, norms: PlannerNorms = DEFAULT_PLANNER_NORMS) {
+  const rate = process === "pick" ? norms.pick_per_hour : norms.pack_per_hour;
+  return Math.round((activityMinutes(employee, process, 10 * 60) / 60) * rate * employee.progress[process]);
 }
 
-export function currentPlan(employee: Employee, process: ProcessKind) {
-  return Math.round((activityMinutes(employee, process, 10 * 60) / 60) * PROCESS_NORMS[process]);
+export function currentPlan(employee: Employee, process: ProcessKind, norms: PlannerNorms = DEFAULT_PLANNER_NORMS) {
+  const rate = process === "pick" ? norms.pick_per_hour : norms.pack_per_hour;
+  return Math.round((activityMinutes(employee, process, 10 * 60) / 60) * rate);
 }
 
 export function slotsAt(time: string) {
