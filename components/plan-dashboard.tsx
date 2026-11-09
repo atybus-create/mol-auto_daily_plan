@@ -23,6 +23,7 @@ export function PlanDashboard() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [scheduleMeta, setScheduleMeta] = useState<{ version: number | null; snapshotAt: string | null; sourceSheet: string | null }>({ version: null, snapshotAt: null, sourceSheet: null });
   const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [scheduleReload, setScheduleReload] = useState(0);
   const [editingEnabled, setEditingEnabled] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState("");
@@ -84,7 +85,7 @@ export function PlanDashboard() {
 
     loadSchedule();
     return () => controller.abort();
-  }, [date]);
+  }, [date, scheduleReload]);
 
   function showToast(message: string) {
     setToast(message);
@@ -164,16 +165,12 @@ export function PlanDashboard() {
               }}
             />
           </label>
-          <button className="button button-secondary" type="button" onClick={() => { setDate((current) => `${current}`); showToast("Grafik jest pobierany automatycznie po zmianie daty."); }}><span aria-hidden="true">↻</span> Przelicz plan</button>
+          <button className="button button-secondary" type="button" disabled={scheduleLoading} onClick={() => { setScheduleReload((value) => value + 1); showToast("Odświeżam grafik."); }}><span aria-hidden="true">↻</span> Odśwież grafik</button>
           <button
-            className={`button button-primary${editingEnabled ? " is-active" : ""}`}
+            className="button button-primary"
             type="button"
-            aria-pressed={editingEnabled}
-            onClick={() => {
-              const nextValue = !editingEnabled;
-              setEditingEnabled(nextValue);
-              showToast(nextValue ? "Tryb edycji makiety włączony. Wybierz blok harmonogramu." : "Tryb edycji wyłączony.");
-            }}
+            disabled
+            title="Edycja zostanie włączona po uruchomieniu algorytmu planowania."
           >
             <span aria-hidden="true">✎</span> Edytuj plan
           </button>
