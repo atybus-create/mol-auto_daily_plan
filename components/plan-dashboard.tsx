@@ -4,9 +4,12 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { OrdersView } from "@/components/orders-view";
 import { WorkPlan } from "@/components/work-plan";
-import { DEMO_DATE, demoEmployees, demoOrderFlow } from "@/lib/demo-data";
+import { DEMO_DATE, demoOrderFlow } from "@/lib/demo-data";
 import { activityLabels } from "@/lib/plan-utils";
 import type { ActivityKind, AppTab, Employee } from "@/types/plan";
+
+type ScheduleApiEmployee = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
+type ScheduleApiResponse = { ok: boolean; error?: string; date: string; version: number | null; snapshot_at: string | null; source_sheet: string | null; employees: ScheduleApiEmployee[] };
 
 type Selection = {
   employeeId: string;
@@ -17,7 +20,9 @@ type Selection = {
 export function PlanDashboard() {
   const [activeTab, setActiveTab] = useState<AppTab>("work");
   const [date, setDate] = useState(DEMO_DATE);
-  const [employees, setEmployees] = useState<Employee[]>(demoEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [scheduleMeta, setScheduleMeta] = useState<{ version: number | null; snapshotAt: string | null; sourceSheet: string | null }>({ version: null, snapshotAt: null, sourceSheet: null });
+  const [scheduleLoading, setScheduleLoading] = useState(true);
   const [editingEnabled, setEditingEnabled] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState("");
@@ -31,6 +36,55 @@ export function PlanDashboard() {
     const timer = window.setTimeout(() => setToast(""), 3300);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadSchedule() {
+      setScheduleLoading(true);
+      try {
+        const response = await fetch("/api/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date }),
+          signal: controller.signal,
+        });
+        const result = await response.json() as ScheduleApiResponse;
+
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || "Nie udało się pobrać grafiku.");
+        }
+
+        const mapped: Employee[] = result.employees
+          .filter((employee) => employee.start && employee.end)
+          .map((employee) => ({
+            id: employee.id,
+            name: employee.name,
+            group: employee.area === "PRZYJĘCIE" ? "Przyjęcie" : employee.area === "WYDANIE" ? "Wydanie" : employee.area,
+            progress: { pick: 0, pack: 0 },
+            blocks: [{
+              start: employee.start!,
+              end: employee.end!,
+              kind: employee.duty ? "duty" : "presence",
+            }],
+          }));
+
+        setEmployees(mapped);
+        setScheduleMeta({ version: result.version, snapshotAt: result.snapshot_at, sourceSheet: result.source_sheet });
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setEmployees([]);
+          setScheduleMeta({ version: null, snapshotAt: null, sourceSheet: null });
+          showToast(error instanceof Error ? error.message : "Nie udało się pobrać grafiku.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setScheduleLoading(false);
+      }
+    }
+
+    loadSchedule();
+    return () => controller.abort();
+  }, [date]);
 
   function showToast(message: string) {
     setToast(message);
@@ -50,7 +104,7 @@ export function PlanDashboard() {
 
   function openBlockEditor(employeeId: string, blockIndex: number, button: HTMLButtonElement) {
     if (!editingEnabled) {
-      showToast("Wybierz „Edytuj plan”, aby zmienić demonstracyjny harmonogram.");
+      showToast("Przydział czynności będzie edytowalny po uruchomieniu modułu planera.");
       return;
     }
     const employee = employees.find((item) => item.id === employeeId);
@@ -75,7 +129,7 @@ export function PlanDashboard() {
       return { ...employee, blocks: nextBlocks };
     }));
     dialogRef.current?.close();
-    showToast("Zmieniono blok w lokalnej makiecie. Dane nie są zapisywane do n8n.");
+    showToast("Zmiana jest lokalna. Zapis planu do backendu będzie kolejnym etapem.");
   }
 
   function restoreDialogFocus() {
@@ -89,8 +143,8 @@ export function PlanDashboard() {
     <>
       <div className="utility-bar">
         <span>ESTYL · OPERACJE MAGAZYNOWE</span>
-        <span className="utility-status"><i /><span>Dane demonstracyjne</span></span>
-        <span>Plan roboczy</span>
+        <span className="utility-status"><i /><span>{scheduleLoading ? "Pobieranie grafiku…" : "Grafik źródłowy aktywny"}</span></span>
+        <span>{scheduleMeta.sourceSheet ?? "Plan roboczy"}</span>
       </div>
 
       <header className="site-header">
@@ -106,11 +160,11 @@ export function PlanDashboard() {
               value={date}
               onChange={(event) => {
                 setDate(event.target.value);
-                showToast("Zmieniono datę widoku demonstracyjnego. Grafik jest przykładowy.");
+                showToast("Pobieram grafik dla wybranego dnia.");
               }}
             />
           </label>
-          <button className="button button-secondary" type="button" onClick={() => showToast("Odświeżono obliczenia demonstracyjne. Backend n8n nie jest jeszcze podłączony.")}><span aria-hidden="true">↻</span> Przelicz plan</button>
+          <button className="button button-secondary" type="button" onClick={() => { setDate((current) => `${current}`); showToast("Grafik jest pobierany automatycznie po zmianie daty."); }}><span aria-hidden="true">↻</span> Przelicz plan</button>
           <button
             className={`button button-primary${editingEnabled ? " is-active" : ""}`}
             type="button"
@@ -174,7 +228,7 @@ export function PlanDashboard() {
           <OrdersView flow={demoOrderFlow} />
         )}
 
-        <footer className="page-footer"><span>ESTYL.PL <b>·</b> MOL Plan Dnia</span><span>Makieta funkcjonalna — dane demonstracyjne</span></footer>
+        <footer className="page-footer"><span>ESTYL.PL <b>·</b> MOL Plan Dnia</span><span>{scheduleMeta.version ? `Grafik v${scheduleMeta.version} · ${scheduleMeta.sourceSheet ?? ""}` : "Brak danych grafiku dla wybranej daty"}</span></footer>
       </main>
 
       <dialog ref={dialogRef} className="activity-dialog" onClose={restoreDialogFocus} aria-labelledby="dialog-title">
