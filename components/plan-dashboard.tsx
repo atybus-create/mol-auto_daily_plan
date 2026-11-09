@@ -1,153 +1,127 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { OrdersView } from "@/components/orders-view";
+import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
 import { DEMO_DATE, demoOrderFlow } from "@/lib/demo-data";
-import { activityLabels } from "@/lib/plan-utils";
-import type { ActivityKind, AppTab, Employee } from "@/types/plan";
+import type { AppTab, Employee, EmployeeProfile, PlannerNorms } from "@/types/plan";
 
-type ScheduleApiEmployee = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
-type ScheduleApiResponse = { ok: boolean; error?: string; date: string; version: number | null; snapshot_at: string | null; source_sheet: string | null; employees: ScheduleApiEmployee[] };
+type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
+type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
+type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]; norms: PlannerNorms; version: number };
 
-type Selection = {
-  employeeId: string;
-  blockIndex: number;
-  returnFocus: HTMLButtonElement;
-};
+const defaultNorms: PlannerNorms = { pick_per_hour: 210, pack_per_hour: 70, pick_seconds: 22, pack_seconds: 50 };
+const leaderKeys = new Set(["magda_w", "aso", "alina"]);
+const receivingKeys = new Set(["mateusz", "nikita", "murat"]);
+
+function defaultGroup(key: string) {
+  return leaderKeys.has(key) ? "Lider / Specjalista" : receivingKeys.has(key) ? "Przyjęcia" : "Wydanie";
+}
 
 export function PlanDashboard() {
   const [activeTab, setActiveTab] = useState<AppTab>("work");
   const [date, setDate] = useState(DEMO_DATE);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [scheduleMeta, setScheduleMeta] = useState<{ version: number | null; snapshotAt: string | null; sourceSheet: string | null }>({ version: null, snapshotAt: null, sourceSheet: null });
+  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+  const [scheduleVersion, setScheduleVersion] = useState<number | null>(null);
+  const [sourceSheet, setSourceSheet] = useState<string | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(true);
-  const [scheduleReload, setScheduleReload] = useState(0);
-  const [editingEnabled, setEditingEnabled] = useState(false);
+  const [profiles, setProfiles] = useState<EmployeeProfile[]>([]);
+  const [norms, setNorms] = useState<PlannerNorms>(defaultNorms);
+  const [configVersion, setConfigVersion] = useState(0);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState("");
+  const [reload, setReload] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState("");
-  const [selection, setSelection] = useState<Selection | null>(null);
-  const [selectedActivity, setSelectedActivity] = useState<ActivityKind | "remove">("pick");
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const tabRefs = useRef<Record<AppTab, HTMLButtonElement | null>>({ work: null, orders: null });
 
   useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(""), 3300);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+    setDate(new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit" }));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
+    async function readConfig() {
+      setConfigLoading(true);
+      try {
+        const res = await fetch("/api/config", { cache: "no-store", signal: controller.signal });
+        const data = await res.json() as ConfigResponse;
+        if (!res.ok || !data.ok || !Array.isArray(data.profiles)) throw new Error(data.error || "Nie udało się pobrać ustawień.");
+        setProfiles(data.profiles);
+        setNorms(data.norms);
+        setConfigVersion(data.version);
+        setConfigError("");
+      } catch (err) {
+        if (!controller.signal.aborted) setConfigError(err instanceof Error ? err.message : "Brak konfiguracji.");
+      } finally {
+        if (!controller.signal.aborted) setConfigLoading(false);
+      }
+    }
+    readConfig();
+    return () => controller.abort();
+  }, [reload]);
 
-    async function loadSchedule() {
+  useEffect(() => {
+    const controller = new AbortController();
+    async function readSchedule() {
       setScheduleLoading(true);
       try {
         const response = await fetch("/api/schedule", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ date }),
+          cache: "no-store",
           signal: controller.signal,
         });
-        const result = await response.json() as ScheduleApiResponse;
-
-        if (!response.ok || !result.ok) {
-          throw new Error(result.error || "Nie udało się pobrać grafiku.");
-        }
-
-        const mapped: Employee[] = result.employees
-          .filter((employee) => employee.start && employee.end)
-          .map((employee) => ({
-            id: employee.id,
-            name: employee.name,
-            group: employee.area === "PRZYJĘCIE" ? "Przyjęcie" : employee.area === "WYDANIE" ? "Wydanie" : employee.area,
-            progress: { pick: 0, pack: 0 },
-            blocks: [{
-              start: employee.start!,
-              end: employee.end!,
-              kind: employee.duty ? "duty" : "presence",
-            }],
-          }));
-
-        setEmployees(mapped);
-        setScheduleMeta({ version: result.version, snapshotAt: result.snapshot_at, sourceSheet: result.source_sheet });
-      } catch (error) {
-        if ((error as Error).name !== "AbortError") {
-          setEmployees([]);
-          setScheduleMeta({ version: null, snapshotAt: null, sourceSheet: null });
-          showToast(error instanceof Error ? error.message : "Nie udało się pobrać grafiku.");
+        const result = await response.json() as ScheduleResponse;
+        if (!response.ok || !result.ok) throw new Error(result.error || "Nie udało się pobrać grafiku.");
+        setSchedule(result.employees ?? []);
+        setScheduleVersion(result.version);
+        setSourceSheet(result.source_sheet);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setSchedule([]);
+          setScheduleVersion(null);
+          setSourceSheet(null);
+          setToast(err instanceof Error ? err.message : "Błąd grafiku.");
         }
       } finally {
         if (!controller.signal.aborted) setScheduleLoading(false);
       }
     }
-
-    loadSchedule();
+    readSchedule();
     return () => controller.abort();
-  }, [date, scheduleReload]);
+  }, [date, reload]);
 
-  function showToast(message: string) {
-    setToast(message);
-  }
+  const employees = useMemo<Employee[]>(() => {
+    const profileMap = new Map(profiles.map(p => [p.employee_key, p]));
+    return schedule
+      .filter(row => row.start && row.end && profileMap.get(row.id)?.active !== false)
+      .map(row => ({
+        id: row.id,
+        name: row.name,
+        group: profileMap.get(row.id)?.group_name || defaultGroup(row.id),
+        duty: Boolean(row.duty),
+        progress: { pick: 0, pack: 0 },
+        blocks: [{ start: row.start!, end: row.end!, kind: "presence" as const }],
+      }));
+  }, [profiles, schedule]);
 
-  function changeTab(nextTab: AppTab) {
-    setActiveTab(nextTab);
-  }
-
-  function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const nextTab: AppTab = activeTab === "work" ? "orders" : "work";
-    setActiveTab(nextTab);
-    tabRefs.current[nextTab]?.focus();
-  }
-
-  function openBlockEditor(employeeId: string, blockIndex: number, button: HTMLButtonElement) {
-    if (!editingEnabled) {
-      showToast("Przydział czynności będzie edytowalny po uruchomieniu modułu planera.");
-      return;
-    }
-    const employee = employees.find((item) => item.id === employeeId);
-    const block = employee?.blocks[blockIndex];
-    if (!block) return;
-    setSelection({ employeeId, blockIndex, returnFocus: button });
-    setSelectedActivity(block.kind);
-    dialogRef.current?.showModal();
-  }
-
-  function closeDialog() {
-    dialogRef.current?.close();
-  }
-
-  function saveActivity() {
-    if (!selection) return;
-    setEmployees((currentEmployees) => currentEmployees.map((employee) => {
-      if (employee.id !== selection.employeeId) return employee;
-      const nextBlocks = [...employee.blocks];
-      if (selectedActivity === "remove") nextBlocks.splice(selection.blockIndex, 1);
-      else nextBlocks[selection.blockIndex] = { ...nextBlocks[selection.blockIndex], kind: selectedActivity };
-      return { ...employee, blocks: nextBlocks };
-    }));
-    dialogRef.current?.close();
-    showToast("Zmiana jest lokalna. Zapis planu do backendu będzie kolejnym etapem.");
-  }
-
-  function restoreDialogFocus() {
-    selection?.returnFocus.focus();
-    setSelection(null);
-  }
-
-  const selectedEmployee = selection ? employees.find((employee) => employee.id === selection.employeeId) : null;
+  const refresh = () => { setReload(x => x + 1); };
+  const navItems: { tab: AppTab; title: string; hint?: string }[] = [
+    { tab: "work", title: "Plan pracy" },
+    { tab: "orders", title: "Zamówienia", hint: "plan i napływ" },
+    { tab: "settings", title: "Ustawienia" },
+  ];
 
   return (
     <>
       <div className="utility-bar">
         <span>ESTYL · OPERACJE MAGAZYNOWE</span>
-        <span className="utility-status"><i /><span>{scheduleLoading ? "Pobieranie grafiku…" : "Grafik źródłowy aktywny"}</span></span>
-        <span>{scheduleMeta.sourceSheet ?? "Plan roboczy"}</span>
+        <span className="utility-status"><i /><span>{scheduleLoading ? "Pobieranie grafiku…" : scheduleVersion ? "Grafik źródłowy aktywny" : "Brak grafiku dla daty"}</span></span>
+        <span>{sourceSheet || "MOL / Plan dnia"}</span>
       </div>
-
       <header className="site-header">
         <div className="brand" aria-label="ESTYL.PL">
           <Image src="/estyl-pl-logo.png" alt="ESTYL.PL" width={320} height={102} priority />
@@ -156,91 +130,45 @@ export function PlanDashboard() {
         <div className="module-name"><span className="module-eyebrow">MOL / WYDANIE</span><strong>Plan dnia</strong></div>
         <div className="header-actions">
           <label className="date-picker">Dzień pracy
-            <input
-              type="date"
-              value={date}
-              onChange={(event) => {
-                setDate(event.target.value);
-                showToast("Pobieram grafik dla wybranego dnia.");
-              }}
-            />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
-          <button className="button button-secondary" type="button" disabled={scheduleLoading} onClick={() => { setScheduleReload((value) => value + 1); showToast("Odświeżam grafik."); }}><span aria-hidden="true">↻</span> Odśwież grafik</button>
-          <button
-            className="button button-primary"
-            type="button"
-            disabled
-            title="Edycja zostanie włączona po uruchomieniu algorytmu planowania."
-          >
-            <span aria-hidden="true">✎</span> Edytuj plan
-          </button>
+          <button className="button button-secondary" type="button" disabled={scheduleLoading || configLoading} onClick={refresh}>↻ Odśwież dane</button>
+          <button className="button button-primary" type="button" disabled title="Uruchomienie po podłączeniu algorytmu planowania">Przelicz plan</button>
           <form action="/api/auth/logout" method="post" className="logout-form">
             <button className="button button-secondary logout-button" type="submit">Wyloguj</button>
           </form>
         </div>
       </header>
-
       <main className="page-shell">
         <nav className="page-tabs" role="tablist" aria-label="Widoki planu dnia">
-          <button
-            className={`page-tab${activeTab === "work" ? " is-active" : ""}`}
-            id="tab-work"
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "work"}
-            aria-controls="work-panel"
-            tabIndex={activeTab === "work" ? 0 : -1}
-            ref={(node) => { tabRefs.current.work = node; }}
-            onClick={() => changeTab("work")}
-            onKeyDown={handleTabKeyDown}
-          >
-            Plan pracy
-          </button>
-          <button
-            className={`page-tab${activeTab === "orders" ? " is-active" : ""}`}
-            id="tab-orders"
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "orders"}
-            aria-controls="orders-panel"
-            tabIndex={activeTab === "orders" ? 0 : -1}
-            ref={(node) => { tabRefs.current.orders = node; }}
-            onClick={() => changeTab("orders")}
-            onKeyDown={handleTabKeyDown}
-          >
-            Zamówienia <span className="tab-hint">plan i napływ</span>
-          </button>
+          {navItems.map(({ tab, title, hint }) => (
+            <button key={tab} className={`page-tab${activeTab === tab ? " is-active" : ""}`}
+              type="button" role="tab" id={`tab-${tab}`}
+              aria-selected={activeTab===tab} aria-controls={`${tab}-panel`}
+              onClick={() => { setActiveTab(tab); setToast(""); }}>
+              {title} {hint && <span className="tab-hint">{hint}</span>}
+            </button>
+          ))}
         </nav>
 
-        {activeTab === "work" ? (
-          <WorkPlan
-            employees={employees}
-            date={date}
-            collapsed={collapsed}
-            editingEnabled={editingEnabled}
-            onToggleCollapsed={() => setCollapsed((value) => !value)}
-            onBlockClick={openBlockEditor}
-          />
-        ) : (
-          <OrdersView flow={demoOrderFlow} />
+        {activeTab === "work" && (
+          <WorkPlan employees={employees} norms={norms} date={date} collapsed={collapsed} editingEnabled={false}
+            onToggleCollapsed={() => setCollapsed(x => !x)}
+            onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
+        {activeTab === "orders" && <div id="orders-panel" role="tabpanel" aria-labelledby="tab-orders">
+          <div className="settings-alert">Wolumen zamówień jest nadal demonstracyjny. Realne źródła podłączymy w kolejnym etapie.</div>
+          <OrdersView flow={demoOrderFlow} />
+        </div>}
+        {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} version={configVersion}
+          loading={configLoading} error={configError} onReload={refresh}/>}
 
-        <footer className="page-footer"><span>ESTYL.PL <b>·</b> MOL Plan Dnia</span><span>{scheduleMeta.version ? `Grafik v${scheduleMeta.version} · ${scheduleMeta.sourceSheet ?? ""}` : "Brak danych grafiku dla wybranej daty"}</span></footer>
+        <footer className="page-footer">
+          <span>ESTYL.PL <b>·</b> MOL Plan Dnia</span>
+          <span>{scheduleVersion ? `Grafik v${scheduleVersion} · ${sourceSheet || ""}` : "Brak danych dla wybranego dnia"} · konfiguracja v{configVersion || "—"}</span>
+        </footer>
       </main>
-
-      <dialog ref={dialogRef} className="activity-dialog" onClose={restoreDialogFocus} aria-labelledby="dialog-title">
-        <button className="dialog-close" type="button" aria-label="Zamknij" onClick={closeDialog}>×</button>
-        <p className="eyebrow">EDYCJA BLOKU</p>
-        <h2 id="dialog-title">{selectedEmployee?.name ?? "Pracownik"} · wybierz czynność</h2>
-        <label htmlFor="activity-select">Czynność</label>
-        <select id="activity-select" value={selectedActivity} onChange={(event) => setSelectedActivity(event.target.value as ActivityKind | "remove")}>
-          {(Object.entries(activityLabels) as [ActivityKind, string][]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          <option value="remove">Usuń przydział</option>
-        </select>
-        <div className="dialog-actions"><button className="button button-secondary" type="button" onClick={closeDialog}>Anuluj</button><button className="button button-primary" type="button" onClick={saveActivity}>Zapisz zmianę</button></div>
-      </dialog>
-
-      <div className={`toast${toast ? " visible" : ""}`} role="status" aria-live="polite">{toast}</div>
+      {toast && <div className="toast visible" role="status" aria-live="polite">{toast}</div>}
     </>
   );
 }
