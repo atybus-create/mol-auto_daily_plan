@@ -15,6 +15,7 @@
   --pick-strong: #32764c;
   --pack: #f8e1e2;
   --pack-strong: #c8585d;
+  --presence: #e8edf4;
   --duty: #e5e7ed;
   --clean: #ece5f5;
   --returns: #dff0f2;
@@ -94,6 +95,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .legend-swatch { width: 11px; height: 11px; border-radius: 3px; }
 .legend-swatch.pick { background: var(--pick-strong); }
 .legend-swatch.pack { background: var(--pack-strong); }
+.legend-swatch.presence { background: #66809d; }
 .legend-swatch.duty { background: #7c8293; }
 .legend-swatch.break { background: #cfd2da; }
 .legend-swatch.clean { background: #8466a7; }
@@ -125,6 +127,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .activity-block:hover { filter: saturate(1.15); transform: translateY(-1px); }
 .activity-block.pick { background: var(--pick); border-color: #c8e3d1; color: #285e3d; }
 .activity-block.pack { background: var(--pack); border-color: #f0ccce; color: #a5484e; }
+.activity-block.presence { background: var(--presence); border-color: #d7dfe9; color: #526980; }
 .activity-block.duty { background: var(--duty); border-color: #d9dce3; color: #626879; }
 .activity-block.break { background: #f0f1f4; border-color: #e6e7eb; color: #777b88; }
 .activity-block.clean { background: var(--clean); border-color: #ded2ed; color: #70528f; }
@@ -139,6 +142,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .cutoff-item { color: #6e7180; font-size: 10px; }
 .cutoff-item b { color: var(--red-dark); font-weight: 700; }
 
+.source-ready-card { margin-top: 12px; padding: 14px 16px; color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
+.source-ready-card b { color: var(--ink); }
 .pace-card { margin-top: 12px; padding: 13px 15px 14px; }
 .pace-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .pace-heading h2 { font-size: 15px; }
