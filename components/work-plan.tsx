@@ -7,10 +7,11 @@ import {
   formatNumber,
   targetFor,
 } from "@/lib/plan-utils";
-import type { Employee, ProcessKind } from "@/types/plan";
+import type { Employee, ProcessKind, PlannerNorms } from "@/types/plan";
 
 type WorkPlanProps = {
   employees: Employee[];
+  norms: PlannerNorms;
   date: string;
   collapsed: boolean;
   editingEnabled: boolean;
@@ -22,6 +23,7 @@ const processes: ProcessKind[] = ["pick", "pack"];
 
 export function WorkPlan({
   employees,
+  norms,
   date,
   collapsed,
   editingEnabled,
@@ -34,10 +36,10 @@ export function WorkPlan({
 
   const totals = employees.reduce(
     (result, employee) => ({
-      pickGoal: result.pickGoal + targetFor(employee, "pick"),
-      packGoal: result.packGoal + targetFor(employee, "pack"),
-      pickDone: result.pickDone + currentActual(employee, "pick"),
-      packDone: result.packDone + currentActual(employee, "pack"),
+      pickGoal: result.pickGoal + targetFor(employee, "pick", norms),
+      packGoal: result.packGoal + targetFor(employee, "pack", norms),
+      pickDone: result.pickDone + currentActual(employee, "pick", norms),
+      packDone: result.packDone + currentActual(employee, "pack", norms),
       hours: result.hours + dailyWorkedHours(employee),
     }),
     { pickGoal: 0, packGoal: 0, pickDone: 0, packDone: 0, hours: 0 },
@@ -124,8 +126,8 @@ export function WorkPlan({
             </div>
             <div className="pace-rows">
               {processes.map((process) => {
-                const actual = employees.reduce((sum, employee) => sum + currentActual(employee, process), 0);
-                const plan = employees.reduce((sum, employee) => sum + currentPlan(employee, process), 0);
+                const actual = employees.reduce((sum, employee) => sum + currentActual(employee, process, norms), 0);
+                const plan = employees.reduce((sum, employee) => sum + currentPlan(employee, process, norms), 0);
                 const variance = actual - plan;
                 const percent = plan ? Math.round((actual / plan) * 100) : 0;
                 const behind = variance < 0;
@@ -162,7 +164,7 @@ export function WorkPlan({
               <div className="table-wrap">
                 <table>
                   <thead><tr><th scope="col">Pracownik</th><th scope="col">PICK cel</th><th scope="col">PAK cel</th><th scope="col">Godziny</th></tr></thead>
-                  <tbody>{employees.map((employee) => <tr key={employee.id}><td>{employee.name}</td><td>{formatNumber(targetFor(employee, "pick"))}</td><td>{formatNumber(targetFor(employee, "pack"))}</td><td>{dailyWorkedHours(employee).toFixed(1).replace(".", ",")} h</td></tr>)}</tbody>
+                  <tbody>{employees.map((employee) => <tr key={employee.id}><td>{employee.name}</td><td>{formatNumber(targetFor(employee, "pick", norms))}</td><td>{formatNumber(targetFor(employee, "pack", norms))}</td><td>{dailyWorkedHours(employee).toFixed(1).replace(".", ",")} h</td></tr>)}</tbody>
                   <tfoot><tr><td>Razem · {employees.length} osób</td><td>{formatNumber(totals.pickGoal)}</td><td>{formatNumber(totals.packGoal)}</td><td>{totals.hours.toFixed(1).replace(".", ",")} h</td></tr></tfoot>
                 </table>
               </div>
@@ -174,10 +176,10 @@ export function WorkPlan({
                 <table>
                   <thead><tr><th scope="col">Pracownik</th><th scope="col">PICK wykonanie / cel</th><th scope="col">PAK wykonanie / cel</th><th scope="col">Realizacja</th></tr></thead>
                   <tbody>{employees.map((employee) => {
-                    const pickGoal = targetFor(employee, "pick");
-                    const packGoal = targetFor(employee, "pack");
-                    const pickDone = currentActual(employee, "pick");
-                    const packDone = currentActual(employee, "pack");
+                    const pickGoal = targetFor(employee, "pick", norms);
+                    const packGoal = targetFor(employee, "pack", norms);
+                    const pickDone = currentActual(employee, "pick", norms);
+                    const packDone = currentActual(employee, "pack", norms);
                     const percentages = [pickGoal ? (pickDone / pickGoal) * 100 : null, packGoal ? (packDone / packGoal) * 100 : null].filter((value): value is number => value !== null);
                     const completion = Math.round(percentages.reduce((sum, value) => sum + value, 0) / percentages.length || 0);
                     return <tr key={employee.id}><td>{employee.name}</td><td>{formatNumber(pickDone)} / {formatNumber(pickGoal)}</td><td>{formatNumber(packDone)} / {formatNumber(packGoal)}</td><td><span className={`completion ${completion >= 90 ? "good" : "behind"}`}>{completion}%</span></td></tr>;
