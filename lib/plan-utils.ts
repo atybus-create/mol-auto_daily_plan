@@ -1,6 +1,6 @@
 import type { Employee, ProcessKind } from "@/types/plan";
 
-export const SLOT_MINUTES = 15;
+export const SLOT_MINUTES = 5;
 export const START_MINUTES = 5 * 60;
 export const END_MINUTES = 18 * 60;
 export const SLOT_COUNT = (END_MINUTES - START_MINUTES) / SLOT_MINUTES;
