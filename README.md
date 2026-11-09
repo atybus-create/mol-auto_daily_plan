@@ -16,7 +16,7 @@ Otwórz `index.html` w przeglądarce. Nie jest wymagany Node.js ani instalowanie
 
 ## Publikacja podglądu na GitHub Pages
 
-Workflow `.github/workflows/pages.yml` publikuje statyczny frontend po włączeniu GitHub Pages w ustawieniach repozytorium: **Settings → Pages → Build and deployment → GitHub Actions**. Publiczny podgląd zawiera tylko dane demonstracyjne.
+Workflow `.github/workflows/pages.yml` jest gotowy do ręcznego uruchomienia po włączeniu GitHub Pages w ustawieniach repozytorium: **Settings → Pages → Build and deployment → GitHub Actions**. Następnie wybierz **Actions → Publish static preview → Run workflow**. Publiczny podgląd zawiera tylko dane demonstracyjne. Workflow nie publikuje aplikacji automatycznie przy każdym commicie.
 
 Przed użyciem rzeczywistych danych pracowników lub zamówień aplikacja musi działać w uzgodnionej, kontrolowanej firmowo przestrzeni i mieć zabezpieczony dostęp. Nie umieszczaj tokenów n8n ani danych produkcyjnych w plikach frontendu.
 
