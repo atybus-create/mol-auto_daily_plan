@@ -5,7 +5,9 @@ import { signConfigEnvelope, type ConfigAction, type SignedConfigEnvelope } from
 export const runtime = "nodejs";
 
 const ROOT = "https://n8n.estyl.team/webhook/";
-const PATHS: Record<ConfigAction, string> = {
+type MutableConfigAction = Exclude<ConfigAction, "readMorningOrders">;
+
+const PATHS: Record<MutableConfigAction, string> = {
   read: "mol-auto-plan-config-read",
   saveEmployee: "mol-auto-plan-config-employee",
   saveNorms: "mol-auto-plan-config-norms",
@@ -19,7 +21,7 @@ function response(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-async function forward(action: ConfigAction, payload: Record<string, unknown>) {
+async function forward(action: MutableConfigAction, payload: Record<string, unknown>) {
   const envelope: SignedConfigEnvelope = { action, issued_at: Date.now(), payload };
   const signature = signConfigEnvelope(envelope);
   const result = await fetch(ROOT + PATHS[action], {
