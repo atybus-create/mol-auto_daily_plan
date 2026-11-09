@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { OrdersView } from "@/components/orders-view";
+import { MorningOrdersView } from "@/components/morning-orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
-import { DEMO_DATE, demoOrderFlow } from "@/lib/demo-data";
+import { DEMO_DATE } from "@/lib/demo-data";
 import type { AppTab, Employee, EmployeeProfile, PlannerNorms } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
@@ -111,7 +111,7 @@ export function PlanDashboard() {
   const refresh = () => { setReload(x => x + 1); };
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
-    { tab: "orders", title: "Zamówienia", hint: "plan i napływ" },
+    { tab: "orders", title: "Zamówienia", hint: "stan 06:00" },
     { tab: "settings", title: "Ustawienia" },
   ];
 
@@ -156,10 +156,7 @@ export function PlanDashboard() {
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
-        {activeTab === "orders" && <div id="orders-panel" role="tabpanel" aria-labelledby="tab-orders">
-          <div className="settings-alert">Wolumen zamówień jest nadal demonstracyjny. Realne źródła podłączymy w kolejnym etapie.</div>
-          <OrdersView flow={demoOrderFlow} />
-        </div>}
+        {activeTab === "orders" && <MorningOrdersView date={date} reload={reload} />}
         {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} version={configVersion}
           loading={configLoading} error={configError} onReload={refresh}/>}
 
