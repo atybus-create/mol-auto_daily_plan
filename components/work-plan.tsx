@@ -28,6 +28,10 @@ export function WorkPlan({
   onToggleCollapsed,
   onBlockClick,
 }: WorkPlanProps) {
+  const hasOperationalPlan = employees.some((employee) =>
+    employee.blocks.some((block) => block.kind === "pick" || block.kind === "pack"),
+  );
+
   const totals = employees.reduce(
     (result, employee) => ({
       pickGoal: result.pickGoal + targetFor(employee, "pick"),
@@ -45,30 +49,40 @@ export function WorkPlan({
         <div>
           <p className="eyebrow">PLANOWANIE OPERACYJNE</p>
           <h1>Plan pracy zespołu</h1>
-          <p className="subtitle">Obsada PICK i PAK, zadania dodatkowe oraz realizacja normy w jednym widoku.</p>
+          <p className="subtitle">
+            {hasOperationalPlan
+              ? "Obsada PICK i PAK, zadania dodatkowe oraz realizacja normy w jednym widoku."
+              : "Grafik źródłowy z godzinami pracy i dyżurami. Przydział PICK / PAK zostanie wyliczony w kolejnym kroku."}
+          </p>
         </div>
         <div className="intro-meta">
-          <span className="mode-badge"><i /> Wersja demonstracyjna</span>
+          <span className="mode-badge"><i /> {hasOperationalPlan ? "Plan operacyjny" : "Grafik źródłowy"}</span>
           <span>{formatLongDate(date)}</span>
         </div>
       </section>
 
       <section className="legend" aria-label="Legenda czynności">
-        <span className="legend-title">CZYNNOŚCI</span>
-        <span><i className="legend-swatch pick" />PICK</span>
-        <span><i className="legend-swatch pack" />PAK</span>
+        <span className="legend-title">{hasOperationalPlan ? "CZYNNOŚCI" : "DANE Z GRAFIKU"}</span>
+        {!hasOperationalPlan && <span><i className="legend-swatch presence" />Obecność</span>}
+        {hasOperationalPlan && <span><i className="legend-swatch pick" />PICK</span>}
+        {hasOperationalPlan && <span><i className="legend-swatch pack" />PAK</span>}
         <span><i className="legend-swatch duty" />Dyżur</span>
-        <span><i className="legend-swatch break" />Przerwa</span>
-        <span><i className="legend-swatch clean" />Porządki</span>
-        <span><i className="legend-swatch returns" />Zwroty</span>
-        <span className="legend-hint">Zaznacz blok, aby zmienić czynność</span>
+        {hasOperationalPlan && <span><i className="legend-swatch break" />Przerwa</span>}
+        {hasOperationalPlan && <span><i className="legend-swatch clean" />Porządki</span>}
+        {hasOperationalPlan && <span><i className="legend-swatch returns" />Zwroty</span>}
+        <span className="legend-hint">
+          {hasOperationalPlan ? "Plan można skorygować ręcznie" : "Godziny i dyżury pochodzą z miesięcznego grafiku MOL"}
+        </span>
       </section>
 
       <section className="schedule-card card" aria-labelledby="schedule-title">
         <div className="section-heading schedule-heading">
-          <div><p className="eyebrow">OBSADA I CZAS</p><h2 id="schedule-title">Harmonogram dnia</h2></div>
+          <div>
+            <p className="eyebrow">OBSADA I CZAS</p>
+            <h2 id="schedule-title">{hasOperationalPlan ? "Harmonogram dnia" : "Grafik wejściowy"}</h2>
+          </div>
           <div className="schedule-tools">
-            <span className="resolution-note">Siatka co 15 min · podział godzin co 30 min</span>
+            <span className="resolution-note">Siatka co 5 min · plan docelowo w blokach 15 min</span>
             <button
               className="icon-button"
               type="button"
@@ -96,76 +110,85 @@ export function WorkPlan({
         </div>
       </section>
 
-      <section className="pace-card card" aria-labelledby="pace-title">
-        <div className="pace-heading">
-          <div><p className="eyebrow">TEMPO ZESPOŁU</p><h2 id="pace-title">Realizacja względem planu</h2></div>
-          <div className="refresh-info"><span className="refresh-dot" /><span>Odświeżanie co 30 min</span><span className="refresh-separator">·</span><span>Ostatnia aktualizacja <b>10:00</b></span></div>
-        </div>
-        <div className="pace-rows">
-          {processes.map((process) => {
-            const actual = employees.reduce((sum, employee) => sum + currentActual(employee, process), 0);
-            const plan = employees.reduce((sum, employee) => sum + currentPlan(employee, process), 0);
-            const variance = actual - plan;
-            const percent = plan ? Math.round((actual / plan) * 100) : 0;
-            const behind = variance < 0;
-            return (
-              <div className="pace-row" key={process}>
-                <span className={`process-pill ${process}`}>{process === "pick" ? "PICK" : "PAK"}</span>
-                <span className="pace-number">Wykonanie<b>{formatNumber(actual)}</b></span>
-                <span className="pace-number">Plan narastająco<b>{formatNumber(plan)}</b></span>
-                <div className="progress-wrap">
-                  <div
-                    className="progress-track"
-                    role="progressbar"
-                    aria-label={`${process === "pick" ? "PICK" : "PAK"}: realizacja względem planu`}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.min(percent, 100)}
-                  >
-                    <div className={`progress-fill${behind ? " behind" : ""}`} style={{ width: `${Math.min(percent, 100)}%` }} />
+      {!hasOperationalPlan ? (
+        <section className="source-ready-card card" aria-label="Status danych wejściowych">
+          <b>Grafik gotowy do planowania.</b> Aplikacja zna już godziny obecności, podział Przyjęcie / Wydanie i dyżury.
+          Nie pokazujemy jeszcze zerowych norm PICK / PAK, ponieważ nie został uruchomiony algorytm przydziału pracy.
+        </section>
+      ) : (
+        <>
+          <section className="pace-card card" aria-labelledby="pace-title">
+            <div className="pace-heading">
+              <div><p className="eyebrow">TEMPO ZESPOŁU</p><h2 id="pace-title">Realizacja względem planu</h2></div>
+              <div className="refresh-info"><span className="refresh-dot" /><span>Odświeżanie co 30 min</span></div>
+            </div>
+            <div className="pace-rows">
+              {processes.map((process) => {
+                const actual = employees.reduce((sum, employee) => sum + currentActual(employee, process), 0);
+                const plan = employees.reduce((sum, employee) => sum + currentPlan(employee, process), 0);
+                const variance = actual - plan;
+                const percent = plan ? Math.round((actual / plan) * 100) : 0;
+                const behind = variance < 0;
+                return (
+                  <div className="pace-row" key={process}>
+                    <span className={`process-pill ${process}`}>{process === "pick" ? "PICK" : "PAK"}</span>
+                    <span className="pace-number">Wykonanie<b>{formatNumber(actual)}</b></span>
+                    <span className="pace-number">Plan narastająco<b>{formatNumber(plan)}</b></span>
+                    <div className="progress-wrap">
+                      <div
+                        className="progress-track"
+                        role="progressbar"
+                        aria-label={`${process === "pick" ? "PICK" : "PAK"}: realizacja względem planu`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.min(percent, 100)}
+                      >
+                        <div className={`progress-fill${behind ? " behind" : ""}`} style={{ width: `${Math.min(percent, 100)}%` }} />
+                      </div>
+                      <span className="progress-label">{percent}%</span>
+                    </div>
+                    <span className={`pace-status ${behind ? "behind" : "good"}`}>
+                      {variance > 0 ? "+" : ""}{formatNumber(variance)} · {behind ? "poniżej planu" : variance === 0 ? "zgodnie z planem" : "powyżej planu"}
+                    </span>
                   </div>
-                  <span className="progress-label">{percent}%</span>
-                </div>
-                <span className={`pace-status ${behind ? "behind" : "good"}`}>
-                  {variance > 0 ? "+" : ""}{formatNumber(variance)} · {behind ? "poniżej planu" : variance === 0 ? "zgodnie z planem" : "powyżej planu"}
-                </span>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="lower-grid">
+            <section className="table-card card" aria-labelledby="norms-title">
+              <div className="table-heading"><div className="table-icon target-icon">◎</div><div><p className="eyebrow">CEL NA DZIŚ</p><h2 id="norms-title">Norma do wykonania</h2></div></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th scope="col">Pracownik</th><th scope="col">PICK cel</th><th scope="col">PAK cel</th><th scope="col">Godziny</th></tr></thead>
+                  <tbody>{employees.map((employee) => <tr key={employee.id}><td>{employee.name}</td><td>{formatNumber(targetFor(employee, "pick"))}</td><td>{formatNumber(targetFor(employee, "pack"))}</td><td>{dailyWorkedHours(employee).toFixed(1).replace(".", ",")} h</td></tr>)}</tbody>
+                  <tfoot><tr><td>Razem · {employees.length} osób</td><td>{formatNumber(totals.pickGoal)}</td><td>{formatNumber(totals.packGoal)}</td><td>{totals.hours.toFixed(1).replace(".", ",")} h</td></tr></tfoot>
+                </table>
               </div>
-            );
-          })}
-        </div>
-      </section>
+            </section>
 
-      <div className="lower-grid">
-        <section className="table-card card" aria-labelledby="norms-title">
-          <div className="table-heading"><div className="table-icon target-icon">◎</div><div><p className="eyebrow">CEL NA DZIŚ</p><h2 id="norms-title">Norma do wykonania</h2></div></div>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th scope="col">Pracownik</th><th scope="col">PICK cel</th><th scope="col">PAK cel</th><th scope="col">Godziny</th></tr></thead>
-              <tbody>{employees.map((employee) => <tr key={employee.id}><td>{employee.name}</td><td>{formatNumber(targetFor(employee, "pick"))}</td><td>{formatNumber(targetFor(employee, "pack"))}</td><td>{dailyWorkedHours(employee).toFixed(1).replace(".", ",")} h</td></tr>)}</tbody>
-              <tfoot><tr><td>Razem · {employees.length} osób</td><td>{formatNumber(totals.pickGoal)}</td><td>{formatNumber(totals.packGoal)}</td><td>{totals.hours.toFixed(1).replace(".", ",")} h</td></tr></tfoot>
-            </table>
+            <section className="table-card card" aria-labelledby="actual-title">
+              <div className="table-heading"><div className="table-icon actual-icon">↗</div><div><p className="eyebrow">WYNIK W TRAKCIE DNIA</p><h2 id="actual-title">Bieżące wykonanie</h2></div></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th scope="col">Pracownik</th><th scope="col">PICK wykonanie / cel</th><th scope="col">PAK wykonanie / cel</th><th scope="col">Realizacja</th></tr></thead>
+                  <tbody>{employees.map((employee) => {
+                    const pickGoal = targetFor(employee, "pick");
+                    const packGoal = targetFor(employee, "pack");
+                    const pickDone = currentActual(employee, "pick");
+                    const packDone = currentActual(employee, "pack");
+                    const percentages = [pickGoal ? (pickDone / pickGoal) * 100 : null, packGoal ? (packDone / packGoal) * 100 : null].filter((value): value is number => value !== null);
+                    const completion = Math.round(percentages.reduce((sum, value) => sum + value, 0) / percentages.length || 0);
+                    return <tr key={employee.id}><td>{employee.name}</td><td>{formatNumber(pickDone)} / {formatNumber(pickGoal)}</td><td>{formatNumber(packDone)} / {formatNumber(packGoal)}</td><td><span className={`completion ${completion >= 90 ? "good" : "behind"}`}>{completion}%</span></td></tr>;
+                  })}</tbody>
+                  <tfoot><tr><td>Razem · zespół</td><td>{formatNumber(totals.pickDone)} / {formatNumber(totals.pickGoal)}</td><td>{formatNumber(totals.packDone)} / {formatNumber(totals.packGoal)}</td><td>—</td></tr></tfoot>
+                </table>
+              </div>
+            </section>
           </div>
-        </section>
-
-        <section className="table-card card" aria-labelledby="actual-title">
-          <div className="table-heading"><div className="table-icon actual-icon">↗</div><div><p className="eyebrow">WYNIK W TRAKCIE DNIA</p><h2 id="actual-title">Bieżące wykonanie</h2></div><span className="table-update">Dane przykładowe</span></div>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th scope="col">Pracownik</th><th scope="col">PICK wykonanie / cel</th><th scope="col">PAK wykonanie / cel</th><th scope="col">Realizacja</th></tr></thead>
-              <tbody>{employees.map((employee) => {
-                const pickGoal = targetFor(employee, "pick");
-                const packGoal = targetFor(employee, "pack");
-                const pickDone = currentActual(employee, "pick");
-                const packDone = currentActual(employee, "pack");
-                const percentages = [pickGoal ? (pickDone / pickGoal) * 100 : null, packGoal ? (packDone / packGoal) * 100 : null].filter((value): value is number => value !== null);
-                const completion = Math.round(percentages.reduce((sum, value) => sum + value, 0) / percentages.length || 0);
-                return <tr key={employee.id}><td>{employee.name}</td><td>{formatNumber(pickDone)} / {formatNumber(pickGoal)}</td><td>{formatNumber(packDone)} / {formatNumber(packGoal)}</td><td><span className={`completion ${completion >= 90 ? "good" : "behind"}`}>{completion}%</span></td></tr>;
-              })}</tbody>
-              <tfoot><tr><td>Razem · zespół</td><td>{formatNumber(totals.pickDone)} / {formatNumber(totals.pickGoal)}</td><td>{formatNumber(totals.packDone)} / {formatNumber(totals.packGoal)}</td><td>—</td></tr></tfoot>
-            </table>
-          </div>
-        </section>
-      </div>
+        </>
+      )}
     </section>
   );
 }
