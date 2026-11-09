@@ -12,6 +12,7 @@ type ScheduleProps = {
 
 export function Schedule({ employees, date, collapsed, editingEnabled, onBlockClick }: ScheduleProps) {
   const monday = isMonday(date);
+  const groups = Array.from(new Set(employees.map((employee) => employee.group)));
   const markers = [
     { time: "10:00", label: "Cutoff Allegro One" },
     { time: "12:00", label: monday ? "Pozostali + InPost / Orlen (pn)" : "Pozostali kurierzy" },
@@ -29,7 +30,7 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
               <div
                 className="hour-block"
                 key={hour}
-                style={{ gridColumn: `${2 + index * 4} / span 4`, gridRow: 1 }}
+                style={{ gridColumn: `${2 + index * 12} / span 12`, gridRow: 1 }}
               >
                 {String(hour).padStart(2, "0")}:00
               </div>
@@ -42,7 +43,7 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
               <div
                 className="half-hour-tick"
                 key={`${hour}-${minute}`}
-                style={{ gridColumn: `${2 + index * 2} / span 2`, gridRow: 2 }}
+                style={{ gridColumn: `${2 + index * 6} / span 6`, gridRow: 2 }}
               >
                 {String(hour).padStart(2, "0")}:{minute}
               </div>
@@ -50,35 +51,45 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
           })}
         </div>
 
-        <div className="group-row">
-          <div className="group-label">Zespół wydania · {employees.length} osób</div>
-        </div>
+        {groups.map((group) => {
+          const groupEmployees = employees.filter((employee) => employee.group === group);
+          return (
+            <div key={group}>
+              <div className="group-row">
+                <div className="group-label">{group} · {groupEmployees.length} osób</div>
+              </div>
 
-        {!collapsed && employees.map((employee) => (
-          <div className="employee-row" key={employee.id}>
-            <div className="employee-name" style={{ gridColumn: 1 }}>{employee.name}</div>
-            {Array.from({ length: SLOT_COUNT }, (_, slot) => (
-              <div className="employee-cell" style={{ gridColumn: slot + 2 }} aria-hidden="true" key={slot} />
-            ))}
-            {employee.blocks.map((block, blockIndex) => {
-              const style: CSSProperties = {
-                gridColumn: `${2 + slotsAt(block.start)} / span ${(timeToMinutes(block.end) - timeToMinutes(block.start)) / 15}`,
-              };
-              return (
-                <button
-                  className={`activity-block ${block.kind}`}
-                  type="button"
-                  style={style}
-                  key={`${employee.id}-${block.start}-${blockIndex}`}
-                  aria-label={`${employee.name}: ${activityLabels[block.kind]}, od ${block.start} do ${block.end}.${editingEnabled ? " Wybierz, aby zmienić czynność." : " Włącz tryb edycji, aby zmienić czynność."}`}
-                  onClick={(event) => onBlockClick(employee.id, blockIndex, event.currentTarget)}
-                >
-                  {activityLabels[block.kind]}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+              {!collapsed && groupEmployees.map((employee) => (
+                <div className="employee-row" key={employee.id}>
+                  <div className="employee-name" style={{ gridColumn: 1 }}>
+                    {employee.name}
+                    <small>{employee.blocks.map((block) => `${block.start}–${block.end}`).join(" · ")}</small>
+                  </div>
+                  {Array.from({ length: SLOT_COUNT }, (_, slot) => (
+                    <div className="employee-cell" style={{ gridColumn: slot + 2 }} aria-hidden="true" key={slot} />
+                  ))}
+                  {employee.blocks.map((block, blockIndex) => {
+                    const style: CSSProperties = {
+                      gridColumn: `${2 + slotsAt(block.start)} / span ${(timeToMinutes(block.end) - timeToMinutes(block.start)) / 5}`,
+                    };
+                    return (
+                      <button
+                        className={`activity-block ${block.kind}`}
+                        type="button"
+                        style={style}
+                        key={`${employee.id}-${block.start}-${blockIndex}`}
+                        aria-label={`${employee.name}: ${activityLabels[block.kind]}, od ${block.start} do ${block.end}.${editingEnabled ? " Wybierz, aby zmienić czynność." : ""}`}
+                        onClick={(event) => onBlockClick(employee.id, blockIndex, event.currentTarget)}
+                      >
+                        {activityLabels[block.kind]}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          );
+        })}
 
         <div className="grid-rail">
           <div className="rail-label">Punkty kontrolne</div>
@@ -86,7 +97,7 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
             <div
               className="cutoff-marker"
               key={`${marker.time}-${marker.label}`}
-              style={{ gridColumn: `${2 + slotsAt(marker.time)} / span 8` }}
+              style={{ gridColumn: `${2 + slotsAt(marker.time)} / span 24` }}
             >
               <b>{marker.time}</b> {marker.label}
             </div>
