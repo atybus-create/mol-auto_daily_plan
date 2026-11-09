@@ -110,7 +110,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .icon-button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink-soft); font-size: 18px; }
 .schedule-scroll { overflow: auto; border-top: 1px solid var(--line); scrollbar-color: #bfc2cc #f3f4f7; }
 .schedule-grid { min-width: 1240px; --name-col: 155px; }
-.time-header, .employee-row, .group-row { display: grid; grid-template-columns: var(--name-col) repeat(52, minmax(22px, 1fr)); }
+.time-header, .employee-row, .group-row { display: grid; grid-template-columns: var(--name-col) repeat(156, minmax(7px, 1fr)); }
 .time-header { position: sticky; top: 0; z-index: 3; height: 50px; grid-template-rows: 24px 26px; background: #f8f8fa; border-bottom: 1px solid #d9dbe2; }
 .employee-head { position: sticky; left: 0; z-index: 5; grid-row: 1 / span 2; display: flex; align-items: center; padding: 0 12px; background: #f8f8fa; border-right: 1px solid var(--line); color: #858897; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .hour-block { display: flex; align-items: flex-start; justify-content: center; padding-top: 6px; border-left: 1px solid #d4d6de; color: var(--ink); font-size: 11px; font-weight: 700; }
@@ -133,7 +133,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .activity-block.clean { background: var(--clean); border-color: #ded2ed; color: #70528f; }
 .activity-block.returns { background: var(--returns); border-color: #cde5e8; color: #347982; }
 .activity-block[aria-pressed="true"] { outline: 2px solid var(--navy-soft); outline-offset: 1px; }
-.grid-rail { display: grid; grid-template-columns: var(--name-col) repeat(52, minmax(22px, 1fr)); min-height: 34px; background: #fafafd; border-top: 1px solid var(--line); }
+.grid-rail { display: grid; grid-template-columns: var(--name-col) repeat(156, minmax(7px, 1fr)); min-height: 34px; background: #fafafd; border-top: 1px solid var(--line); }
 .rail-label { display: flex; align-items: center; padding: 0 11px; color: #898c99; font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .cutoff-marker { grid-row: 1; align-self: center; display: flex; align-items: center; gap: 5px; width: max-content; max-width: calc(100% - 4px); overflow: hidden; padding: 4px 7px; border: 1px solid #f1d2d7; border-radius: 3px; background: #fff6f7; color: #a74352; font-size: 9px; white-space: nowrap; }
 .cutoff-marker b { color: var(--red-dark); }
