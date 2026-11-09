@@ -9,6 +9,7 @@ export const PROCESS_NORMS: Record<ProcessKind, number> = { pick: 210, pack: 70 
 export const activityLabels = {
   pick: "PICK",
   pack: "PAK",
+  presence: "Obecność",
   duty: "Dyżur",
   break: "Przerwa",
   clean: "Porządki",
