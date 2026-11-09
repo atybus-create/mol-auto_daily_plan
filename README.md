@@ -41,6 +41,8 @@ npm run build
 
 Vercel jest połączony z repozytorium. Zmiana na gałęzi `main` uruchamia wdrożenie produkcyjne, a pozostałe gałęzie mogą służyć jako podglądy zmian.
 
+Projekt wymaga presetu **Next.js**; jego konfigurację utrwala również plik `vercel.json`.
+
 Nie umieszczaj tokenów n8n ani danych produkcyjnych w kodzie frontendu. Integracja zostanie podłączona przez zabezpieczoną warstwę API.
 
 ## Kolejny etap
