@@ -123,6 +123,9 @@ export function PlanDashboard() {
           >
             <span aria-hidden="true">✎</span> Edytuj plan
           </button>
+          <form action="/api/auth/logout" method="post" className="logout-form">
+            <button className="button button-secondary logout-button" type="submit">Wyloguj</button>
+          </form>
         </div>
       </header>
 

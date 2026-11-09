@@ -8,6 +8,7 @@ Frontend aplikacji do planowania pracy magazynu ESTYL. Projekt działa jako apli
 - **Zamówienia** — poranna pula `.PL` i `_PL`, półgodzinowy plan napływu, dane rzeczywiste do godziny 10:00 i odchylenie od planu.
 - **Interakcje demonstracyjne** — zmiana daty, zwijanie zespołu, tryb edycji bloków, lokalne przeliczenie oraz nawigacja zakładek z klawiatury.
 - **Dostępność** — semantyczne zakładki, etykiety kontrolek, opisane paski postępu, widoczne focusy i respektowanie `prefers-reduced-motion`.
+- **Kontrola dostępu** — wspólne hasło aplikacji, podpisana sesja HTTP-only oraz ochrona ekranów i przyszłych endpointów API.
 
 Wszystkie dane są nadal przykładowe. Aplikacja nie łączy się jeszcze z n8n, EasyStorage, BaseLinker, SellRocket ani FTP i nie zapisuje zmian.
 
@@ -37,11 +38,11 @@ npm run lint
 npm run build
 ```
 
+Przed uruchomieniem ustaw `MOL_APP_PASSWORD_HASH` (SHA-256 hasła) oraz losowy `MOL_SESSION_SECRET` o długości co najmniej 32 znaków. W Vercelu dodaj je jako zmienne środowiskowe dla Production, Preview i Development. Wartości nie mogą trafić do repozytorium.
+
 ## Publikacja
 
 Vercel jest połączony z repozytorium. Zmiana na gałęzi `main` uruchamia wdrożenie produkcyjne, a pozostałe gałęzie mogą służyć jako podglądy zmian.
-
-Projekt wymaga presetu **Next.js**; jego konfigurację utrwala również plik `vercel.json`.
 
 Nie umieszczaj tokenów n8n ani danych produkcyjnych w kodzie frontendu. Integracja zostanie podłączona przez zabezpieczoną warstwę API.
 
