@@ -1,47 +1,192 @@
 import { formatNumber } from "@/lib/plan-utils";
-import type { CourierGroup, DayDemandSnapshot } from "@/types/plan";
+import type { CourierGroup, DayDemandV2Snapshot, OrdersDemandSnapshot } from "@/types/plan";
 
-type OrdersViewProps = { demand: DayDemandSnapshot | null; loading: boolean; error: string };
+type OrdersViewProps = { demand: OrdersDemandSnapshot | null; loading: boolean; error: string };
 
 const courierNames: Record<CourierGroup, string> = {
-  allegro_one: "Allegro One", inpost_orlen: "InPost / Orlen", other: "Pozostali", unknown: "Nierozpoznani",
+  allegro_one: "Allegro One",
+  inpost_orlen: "InPost / Orlen",
+  other: "Pozostali",
+  unknown: "Nierozpoznani",
 };
 
+function isV2(demand: OrdersDemandSnapshot): demand is DayDemandV2Snapshot {
+  return "contract_version" in demand && demand.contract_version === 2;
+}
+
 export function OrdersView({ demand, loading, error }: OrdersViewProps) {
-  if (loading) return <OrdersState title="Pobieranie planu zamówień…" detail="Łączę pulę z 06:00 z prognozą półgodzinową." />;
+  if (loading) return <OrdersState title="Pobieranie planu zamówień…" detail="Łączę stan 06:00, prognozę i realny spływ półgodzinny." />;
   if (error || !demand) return <OrdersState title="Plan zamówień jest niedostępny" detail={error || "Brak danych dla wybranego dnia."} />;
+
+  const v2 = isV2(demand);
   const { morning, forecast, plan_gross: gross } = demand;
   const statusLabel = demand.status === "ready" ? "Gotowy" : demand.status === "stale" ? "Dane nieaktualne" : "Plan częściowy";
+
   return (
     <section id="orders-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-orders">
       <section className="page-intro orders-intro">
-        <div><p className="eyebrow">WOLUMEN ZAMÓWIEŃ</p><h1>Plan i prognozowany napływ</h1><p className="subtitle">Rzeczywista pula o 06:00 oraz 20 prognozowanych bloków do 16:00.</p></div>
-        <div className="intro-meta"><span className={`mode-badge demand-${demand.status}`}><i /> {statusLabel}</span><span>Model {demand.model_version || "—"} · trening do {demand.trained_until || "—"}</span></div>
+        <div>
+          <p className="eyebrow">WOLUMEN ZAMÓWIEŃ</p>
+          <h1>Plan i realny napływ zamówień</h1>
+          <p className="subtitle">Stan o 06:00, rzeczywisty spływ w zakończonych przedziałach i prognoza na pozostałą część dnia.</p>
+        </div>
+        <div className="intro-meta">
+          <span className={`mode-badge demand-${demand.status}`}><i /> {statusLabel}</span>
+          <span>{v2 ? `Realny spływ do ${demand.real_inflow_to_now.last_slot_end || "—"}` : "Tryb bazowy bez korekty"}</span>
+        </div>
       </section>
+
       {demand.warnings.length > 0 && <div className="demand-warning" role="status">{demand.warnings.join(" · ")}</div>}
+
       <div className="orders-summary demand-summary">
-        <DemandCard label="Pula rano · 06:00" value={morning?.total} detail={morning ? `.PL ${formatNumber(morning.pl)} · _PL ${formatNumber(morning.under)}` : "Brak kompletnego snapshotu BL/SR"} />
-        <DemandCard label="Prognoza nowych · 06–16" value={forecast?.total} detail={forecast ? `zakres ${formatNumber(forecast.p10)}–${formatNumber(forecast.p90)}` : "Prognoza niedostępna"} />
-        <DemandCard label="Plan brutto" value={gross?.total} detail="rano + prognozowany napływ" accent />
-        <DemandCard label="Do realizacji dzisiaj" value={demand.required_today} detail={`po cutoffach · później ${formatMaybe(demand.after_cutoff)}`} />
+        {v2 ? (
+          <>
+            <DemandCard label="Pula rano · 06:00" value={morning?.total} detail={morning ? `.PL ${formatNumber(morning.pl)} · _PL ${formatNumber(morning.under)}` : "Brak kompletnego snapshotu"} />
+            <DemandCard label="Realny spływ do teraz" value={demand.real_inflow_to_now.eligible_actual} detail={`wpłynęło ${formatNumber(demand.real_inflow_to_now.all_actual)} · do realizacji dzisiaj`} />
+            <DemandCard label="Pozostała prognoza" value={demand.remaining_forecast.eligible_today} detail={`${demand.real_inflow_to_now.last_slot_end || "teraz"}–16:00 · kwalifikowane dziś`} />
+            <DemandCard
+              label="Aktualny target dnia"
+              value={demand.corrected_required_today}
+              detail={`bazowo ${formatMaybe(demand.required_today_baseline)} · korekta ${formatSigned(demand.correction_vs_plan)}`}
+              accent
+            />
+          </>
+        ) : (
+          <>
+            <DemandCard label="Pula rano · 06:00" value={morning?.total} detail={morning ? `.PL ${formatNumber(morning.pl)} · _PL ${formatNumber(morning.under)}` : "Brak kompletnego snapshotu"} />
+            <DemandCard label="Prognoza nowych · 06–16" value={forecast?.total} detail={forecast ? `zakres ${formatNumber(forecast.p10)}–${formatNumber(forecast.p90)}` : "Prognoza niedostępna"} />
+            <DemandCard label="Plan brutto" value={gross?.total} detail="rano + prognozowany napływ" />
+            <DemandCard label="Do realizacji dzisiaj" value={demand.required_today} detail={`po cutoffach · później ${formatMaybe(demand.after_cutoff)}`} accent />
+          </>
+        )}
       </div>
+
       <div className="orders-layout">
         <section className="card orders-table-card" aria-labelledby="orders-flow-title">
-          <div className="section-heading"><div><p className="eyebrow">PROGNOZA BAZOWA</p><h2 id="orders-flow-title">Napływ co 30 minut</h2></div><div className="refresh-info"><span className="refresh-dot" /><span>Etap 2 · bez korekty rzeczywistym spływem</span></div></div>
-          {demand.slots.length === 20 ? <div className="table-wrap orders-flow-wrap"><table>
-            <thead><tr><th>Godzina</th><th>.PL</th><th>_PL</th><th>Razem</th><th>Narastająco</th><th>Dzisiejszy cutoff</th><th>Kurierzy</th></tr></thead>
-            <tbody>{demand.slots.map(slot => <tr key={slot.slot_start}>
-              <td>{slot.slot_start}–{slot.slot_end}</td><td>{formatNumber(slot.forecast.pl)}</td><td>{formatNumber(slot.forecast.under)}</td><td><b>{formatNumber(slot.forecast.total)}</b></td><td>{formatNumber(slot.cumulative_plan_gross ?? slot.cumulative_forecast)}</td>
-              <td><span className="eligible-number">{formatNumber(slot.eligible_today)}</span>{slot.after_cutoff > 0 && <small className="after-cutoff"> +{formatNumber(slot.after_cutoff)} później</small>}</td>
-              <td><details className="courier-details"><summary>{slot.by_carrier.length} grupy</summary><div>{slot.by_carrier.map(carrier => <span key={carrier.group}>{courierNames[carrier.group]}: <b>{formatNumber(carrier.point)}</b></span>)}</div></details></td>
-            </tr>)}</tbody>
-            <tfoot><tr><td>Razem · 06:00–16:00</td><td>{formatMaybe(forecast?.pl)}</td><td>{formatMaybe(forecast?.under)}</td><td>{formatMaybe(forecast?.total)}</td><td>{formatMaybe(gross?.total)}</td><td>{formatNumber(demand.slots.reduce((sum, slot) => sum + slot.eligible_today, 0))}</td><td>—</td></tr></tfoot>
-          </table></div> : <div className="empty-state">Brak kompletnego zestawu 20 bloków dla tego dnia.</div>}
-          <div className="orders-table-note"><span>Prognoza bazowa pozostaje niezmienna przez dzień.</span><span>Rzeczywisty napływ i korekta będą Etapem 3.</span></div>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">{v2 ? "PLAN · RZECZYWISTOŚĆ" : "PROGNOZA BAZOWA"}</p>
+              <h2 id="orders-flow-title">Napływ co 30 minut</h2>
+            </div>
+            <div className="refresh-info">
+              <span className="refresh-dot" />
+              <span>{v2 ? "Zakończone sloty zastępują prognozę realnym spływem" : "Fallback · bez korekty realnym spływem"}</span>
+            </div>
+          </div>
+
+          {demand.slots.length === 20 ? (
+            <div className="table-wrap orders-flow-wrap">
+              <table>
+                <thead>
+                  {v2 ? (
+                    <tr>
+                      <th>Przedział</th>
+                      <th>Prognoza<br />do realizacji</th>
+                      <th>Realnie<br />do realizacji</th>
+                      <th>Różnica</th>
+                      <th>Do realizacji</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th>Przedział</th>
+                      <th>.PL</th>
+                      <th>_PL</th>
+                      <th>Prognoza</th>
+                      <th>Do realizacji</th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody>
+                  {demand.slots.map(slot => {
+                    if (v2) {
+                      const corrected = slot;
+                      return (
+                        <tr key={slot.slot_start}>
+                          <td>{slot.slot_start}–{slot.slot_end}</td>
+                          <td>{formatNumber(slot.eligible_today)}<small className="after-cutoff"> prognoza</small></td>
+                          <td>
+                            {corrected.actual
+                              ? <>{formatNumber(corrected.actual.eligible_total)}<small className="after-cutoff"> wpłynęło {formatNumber(corrected.actual.all_orders)}</small></>
+                              : "—"}
+                          </td>
+                          <td className={varianceClass(corrected.variance_to_forecast)}>
+                            {corrected.variance_to_forecast === null ? "—" : formatSigned(corrected.variance_to_forecast)}
+                          </td>
+                          <td>
+                            <span className="eligible-number">{formatNumber(corrected.effective_today)}</span>
+                            <small className="after-cutoff">{corrected.effective_source === "actual" ? " realnie" : " prognoza"}</small>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <tr key={slot.slot_start}>
+                        <td>{slot.slot_start}–{slot.slot_end}</td>
+                        <td>{formatNumber(slot.forecast.pl)}</td>
+                        <td>{formatNumber(slot.forecast.under)}</td>
+                        <td>{formatNumber(slot.forecast.total)}</td>
+                        <td><span className="eligible-number">{formatNumber(slot.eligible_today)}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  {v2 ? (
+                    <tr>
+                      <td>Aktualny dzień</td>
+                      <td>{formatMaybe(demand.required_today_baseline)}</td>
+                      <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
+                      <td className={varianceClass(demand.correction_vs_plan)}>{formatSigned(demand.correction_vs_plan)}</td>
+                      <td>{formatMaybe(demand.corrected_required_today)}</td>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <td>Razem · 06:00–16:00</td>
+                      <td>{formatMaybe(forecast?.pl)}</td>
+                      <td>{formatMaybe(forecast?.under)}</td>
+                      <td>{formatMaybe(forecast?.total)}</td>
+                      <td>{formatMaybe(demand.required_today)}</td>
+                    </tr>
+                  )}
+                </tfoot>
+              </table>
+            </div>
+          ) : <div className="demand-warning">Brak kompletnego zestawu 20 bloków dla tego dnia.</div>}
+
+          <div className="orders-table-note">
+            {v2
+              ? <><span>Realne dane zastępują prognozę tylko dla zakończonych przedziałów.</span><span>Brak odczytu nie jest traktowany jako zero.</span></>
+              : <><span>Widok awaryjny korzysta z prognozy bazowej.</span><span>Korekta realnym spływem jest chwilowo niedostępna.</span></>}
+          </div>
         </section>
+
         <aside className="orders-side">
-          <section className="card morning-card"><div className="section-heading"><div><p className="eyebrow">STRUKTURA PLANU</p><h2>Rano + nowe zamówienia</h2></div></div><div className="demand-equation"><span>{formatMaybe(morning?.total)}</span><i>+</i><span>{formatMaybe(forecast?.total)}</span><i>=</i><strong>{formatMaybe(gross?.total)}</strong></div><div className="morning-source">Snapshot: {demand.source_as_of ? new Date(demand.source_as_of).toLocaleString("pl-PL") : "—"}</div></section>
-          <section className="card cutoff-card"><div className="section-heading"><div><p className="eyebrow">REGUŁY DNIA</p><h2>Cutoffy kurierów</h2></div></div><div className="cutoff-rule"><b>do 10:00</b><span>wszystkie rozpoznane grupy</span></div><div className="cutoff-rule"><b>10:00–12:00</b><span>bez Allegro One</span></div><div className="cutoff-rule"><b>12:00–16:00</b><span>InPost / Orlen · wt–pt</span></div><p className="cutoff-note">Poniedziałek: InPost / Orlen do 12:00. Nierozpoznane metody liczymy konserwatywnie jako późniejsze.</p></section>
+          <section className="card morning-card">
+            <div className="section-heading"><div><p className="eyebrow">AKTUALNY PLAN</p><h2>{v2 ? "Korekta dnia" : "Rano + prognoza"}</h2></div></div>
+            {v2 ? (
+              <>
+                <div className="demand-equation">
+                  <span>{formatMaybe(demand.required_today_baseline)}</span><i>{demand.correction_vs_plan >= 0 ? "+" : "−"}</i>
+                  <span>{formatNumber(Math.abs(demand.correction_vs_plan))}</span><i>=</i>
+                  <strong>{formatMaybe(demand.corrected_required_today)}</strong>
+                </div>
+                <div className="morning-source">Realny spływ: {demand.actual_as_of ? new Date(demand.actual_as_of).toLocaleString("pl-PL") : "—"}</div>
+              </>
+            ) : (
+              <>
+                <div className="demand-equation"><span>{formatMaybe(morning?.total)}</span><i>+</i><span>{formatMaybe(forecast?.total)}</span><i>=</i><strong>{formatMaybe(gross?.total)}</strong></div>
+                <div className="morning-source">Snapshot: {demand.source_as_of ? new Date(demand.source_as_of).toLocaleString("pl-PL") : "—"}</div>
+              </>
+            )}
+          </section>
+
+          <section className="card cutoff-card">
+            <div className="section-heading"><div><p className="eyebrow">REGUŁY DNIA</p><h2>Cutoffy kurierów</h2></div></div>
+            <div className="cutoff-rule"><b>do 10:00</b><span>wszystkie rozpoznane grupy</span></div>
+            <div className="cutoff-rule"><b>10:00–12:00</b><span>bez Allegro One</span></div>
+            <div className="cutoff-rule"><b>12:00–16:00</b><span>InPost / Orlen · wt–pt</span></div>
+            <p className="cutoff-note">Poniedziałek: InPost / Orlen do 12:00. Reguły cutoff nie zostały zmienione w tej poprawce.</p>
+          </section>
         </aside>
       </div>
     </section>
@@ -51,7 +196,22 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
 function DemandCard({ label, value, detail, accent = false }: { label: string; value: number | null | undefined; detail: string; accent?: boolean }) {
   return <div className={`order-stat${accent ? " plan-gross" : ""}`}><span>{label}</span><strong>{formatMaybe(value)}</strong><small>{detail}</small></div>;
 }
+
 function OrdersState({ title, detail }: { title: string; detail: string }) {
   return <section id="orders-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-orders"><section className="page-intro"><div><p className="eyebrow">WOLUMEN ZAMÓWIEŃ</p><h1>{title}</h1><p className="subtitle">{detail}</p></div></section></section>;
 }
-function formatMaybe(value: number | null | undefined) { return typeof value === "number" ? formatNumber(value) : "—"; }
+
+function formatMaybe(value: number | null | undefined) {
+  return typeof value === "number" ? formatNumber(value) : "—";
+}
+
+function formatSigned(value: number) {
+  return `${value > 0 ? "+" : ""}${formatNumber(value)}`;
+}
+
+function varianceClass(value: number | null) {
+  if (value === null || value === 0) return undefined;
+  return value > 0 ? "variance-positive" : "variance-negative";
+}
+
+void courierNames;
