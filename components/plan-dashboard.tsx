@@ -251,7 +251,7 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={plannedEmployees} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={generatedPlan?.summary ?? null} planStatus={generatedPlan?.status ?? null} planGeneratedAt={generatedPlan?.generated_at ?? null} collapsed={collapsed} editingEnabled={false}
+          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={generatedPlan?.summary ?? null} planStatus={generatedPlan?.status ?? null} planGeneratedAt={generatedPlan?.generated_at ?? null} collapsed={collapsed} editingEnabled={false}
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
