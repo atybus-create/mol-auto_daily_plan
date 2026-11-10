@@ -444,3 +444,35 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
  .morning-source-meta { font-size:10px; }
  .morning-next-stage { flex-direction:column; gap:4px; }
 }
+
+
+/* MOL plan — employee plan vs EasyStorage execution */
+.operator-performance-card { margin-top: 12px; overflow: hidden; }
+.operator-performance-heading { align-items: center; }
+.operator-performance-source { display: inline-flex; align-items: center; gap: 7px; color: #858896; font-size: 10px; white-space: nowrap; }
+.operator-performance-wrap { overflow-x: auto; }
+.operator-performance-wrap table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 11px; }
+.operator-performance-wrap th,
+.operator-performance-wrap td { padding: 11px 15px; border-top: 1px solid var(--line); text-align: right; vertical-align: middle; }
+.operator-performance-wrap th { background: #fafafd; color: #848795; font-size: 9px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
+.operator-performance-wrap th:first-child,
+.operator-performance-wrap td:first-child { text-align: left; }
+.operator-performance-wrap tbody tr:hover { background: #fcfcfe; }
+.operator-person { display: grid; gap: 2px; }
+.operator-person strong { color: var(--ink); font-size: 12px; }
+.operator-person small { color: #90939f; font-size: 9px; }
+.mapping-warning { width: fit-content; margin-top: 3px; padding: 2px 5px; border-radius: 3px; background: #fff4df; color: #8b6414; font-size: 8px; font-weight: 700; }
+.plan-actual-value { display: inline-grid; grid-template-columns: minmax(34px,auto) 10px minmax(34px,auto); align-items: baseline; justify-content: end; gap: 5px; font-variant-numeric: tabular-nums; }
+.plan-actual-value b { color: #656979; font-weight: 650; }
+.plan-actual-value i { color: #b4b6bf; font-style: normal; text-align: center; }
+.plan-actual-value strong { color: var(--ink); font-size: 13px; font-weight: 750; }
+.realization-badge { display: inline-flex; min-width: 52px; justify-content: center; padding: 5px 8px; border-radius: 4px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.realization-badge.good { background: #e8f3ec; color: #2e6a45; }
+.realization-badge.near { background: #fff5df; color: #8a6517; }
+.realization-badge.behind { background: #fff0f2; color: #a23f50; }
+.realization-badge.unavailable { background: #f1f2f5; color: #9295a1; }
+.operator-performance-note { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 15px; border-top: 1px solid var(--line); background: #fafafd; color: #858896; font-size: 9px; line-height: 1.45; }
+@media (max-width: 700px) {
+  .operator-performance-heading { align-items: flex-start; flex-direction: column; }
+  .operator-performance-source { white-space: normal; }
+}
