@@ -227,3 +227,31 @@ export type GeneratedPlanError = {
   error: string;
   message?: string;
 };
+
+
+export type ExecutionSnapshotLatest = {
+  snapshot_id: string | null;
+  pick_completed: number;
+  pack_completed: number;
+  operators_count: number;
+  collected_at: string | null;
+  age_minutes: number;
+  data_status: string;
+  error_message: string;
+};
+
+export type ExecutionSnapshotResponse = {
+  ok: true;
+  business_date: string;
+  status: "ready" | "stale" | "error" | "partial";
+  complete: boolean;
+  generated_at: string;
+  latest: ExecutionSnapshotLatest | null;
+  warnings: string[];
+};
+
+export type ExecutionSnapshotError = {
+  ok: false;
+  error: string;
+  message?: string;
+};

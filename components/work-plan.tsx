@@ -12,6 +12,8 @@ type WorkPlanProps = {
   norms: PlannerNorms;
   date: string;
   demand: OrdersDemandSnapshot | null;
+  pickRemaining: number | null;
+  packRemaining: number | null;
   planSummary: GeneratedPlanSummary | null;
   planStatus: "DRAFT_READY" | "CAPACITY_SHORTAGE" | null;
   planGeneratedAt: string | null;
@@ -28,6 +30,8 @@ export function WorkPlan({
   norms,
   date,
   demand,
+  pickRemaining,
+  packRemaining,
   planSummary,
   planStatus,
   planGeneratedAt,
@@ -70,8 +74,8 @@ export function WorkPlan({
       <section className="work-demand-strip" aria-label="Wolumen do zaplanowania">
         <WorkDemand label="Pula 06:00" value={demand?.morning?.total} />
         <WorkDemand label="Target dnia" value={planSummary?.target_orders ?? demand?.required_today} accent />
-        <WorkDemand label="PICK pozostało" value={planSummary?.initial_pick_remaining} />
-        <WorkDemand label="PAK pozostało" value={planSummary?.initial_pack_remaining} />
+        <WorkDemand label="PICK pozostało" value={pickRemaining} />
+        <WorkDemand label="PAK pozostało" value={packRemaining} />
       </section>
 
       <section className="legend" aria-label="Legenda czynności">

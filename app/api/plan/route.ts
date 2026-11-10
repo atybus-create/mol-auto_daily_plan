@@ -36,7 +36,17 @@ export async function POST(request: NextRequest) {
     const envelope: SignedConfigEnvelope = {
       action: "generatePlan",
       issued_at: Date.now(),
-      payload: { date, demand: demand as unknown as Record<string, unknown> },
+      payload: {
+        date,
+        demand: {
+          ok: true,
+          business_date: demand.business_date,
+          status: demand.status,
+          corrected_required_today: "corrected_required_today" in demand ? demand.corrected_required_today : demand.required_today,
+          required_today: demand.required_today,
+          generated_at: demand.generated_at,
+        },
+      },
     };
 
     const result = await fetch(PLAN_URL, {
