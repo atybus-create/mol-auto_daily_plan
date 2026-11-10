@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
-import type { AppTab, DayDemandResponse, DayDemandSnapshot, Employee, EmployeeProfile, PlannerNorms } from "@/types/plan";
+import type { AppTab, Employee, EmployeeProfile, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
 type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
@@ -34,7 +34,7 @@ export function PlanDashboard() {
   const [reload, setReload] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState("");
-  const [demand, setDemand] = useState<DayDemandSnapshot | null>(null);
+  const [demand, setDemand] = useState<OrdersDemandSnapshot | null>(null);
   const [demandLoading, setDemandLoading] = useState(true);
   const [demandError, setDemandError] = useState("");
 
@@ -97,8 +97,8 @@ export function PlanDashboard() {
     async function readDemand() {
       setDemandLoading(true);
       try {
-        const response = await fetch(`/api/day-demand?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal });
-        const result = await response.json() as DayDemandResponse;
+        const response = await fetch(`/api/orders?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal });
+        const result = await response.json() as OrdersDemandResponse;
         if (!response.ok || !result.ok) throw new Error(result.ok ? "Nie udało się pobrać planu zamówień." : result.error);
         setDemand(result);
         setDemandError("");
@@ -132,7 +132,7 @@ export function PlanDashboard() {
   const refresh = () => { setReload(x => x + 1); };
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
-    { tab: "orders", title: "Zamówienia", hint: "06:00 + prognoza" },
+    { tab: "orders", title: "Zamówienia", hint: "06:00 + realny spływ" },
     { tab: "settings", title: "Ustawienia" },
   ];
 
