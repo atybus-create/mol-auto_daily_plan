@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { EmployeeProfile, PlannerNorms } from "@/types/plan";
+import type { AuxiliaryPolicy, EmployeeProfile, PlannerNorms, PlannerRole, PreferredProcess } from "@/types/plan";
 
 type SettingsTab = "employees" | "norms" | "planning";
 type Props = {
@@ -14,6 +14,23 @@ type Props = {
 };
 
 const groups = ["Lider / Specjalista", "Przyjęcia", "Wydanie"] as const;
+const plannerRoles: { value: PlannerRole; label: string; hint: string }[] = [
+  { value: "standard", label: "Wydanie podstawowe", hint: "Pierwsza pula zasobów do PICK / PAK." },
+  { value: "receiving_support", label: "Wsparcie Przyjęć", hint: "Po Wydaniu; planner stara się zostawić min. 1 osobę na Przyjęciu." },
+  { value: "specialist_reserve", label: "Rezerwa specjalistyczna", hint: "Dodatkowy zasób po Wydaniu i Przyjęciach." },
+  { value: "leader_reserve", label: "Lider / rezerwa", hint: "Jeden z ostatnich zasobów operacyjnych." },
+  { value: "last_resort", label: "Ostatnia rezerwa", hint: "Uruchamiana dopiero po pozostałych dostępnych zasobach." },
+];
+const preferredProcesses: { value: PreferredProcess; label: string }[] = [
+  { value: "balanced", label: "Bez preferencji" },
+  { value: "pick", label: "Preferuj PICK" },
+  { value: "pack", label: "Preferuj PAK" },
+];
+const auxiliaryPolicies: { value: AuxiliaryPolicy; label: string }[] = [
+  { value: "none", label: "Brak reguły pomocniczej" },
+  { value: "clean_then_returns", label: "Porządki → zwroty" },
+];
+const roleOrder: PlannerRole[] = ["standard", "receiving_support", "specialist_reserve", "leader_reserve", "last_resort"];
 const normFields: { key: keyof PlannerNorms; title: string; hint: string; unit: string }[] = [
   { key: "pick_per_hour", title: "Norma PICK", hint: "Średnia liczba skompletowanych pozycji na godzinę pracy", unit: "PICK/RBH" },
   { key: "pack_per_hour", title: "Norma PAK", hint: "Średnia liczba spakowanych zamówień na godzinę pracy", unit: "PAK/RBH" },
@@ -21,8 +38,21 @@ const normFields: { key: keyof PlannerNorms; title: string; hint: string; unit: 
   { key: "pack_seconds", title: "Obciążenie pakowania", hint: "Czas kalkulacyjny na zamówienie", unit: "s/zam." },
 ];
 
-function cloneProfile(p: EmployeeProfile) {
-  return { ...p, es_login: p.es_login ?? "", max_hours: p.max_hours ?? 0 };
+function cloneProfile(p: EmployeeProfile): EmployeeProfile {
+  return {
+    ...p,
+    es_login: p.es_login ?? "",
+    max_hours: p.max_hours ?? 0,
+    planner_role: p.planner_role ?? "standard",
+    allocation_rank: p.allocation_rank ?? 10,
+    preferred_process: p.preferred_process ?? "balanced",
+    supervisor_guard: p.supervisor_guard ?? false,
+    auxiliary_policy: p.auxiliary_policy ?? "none",
+  };
+}
+
+function roleLabel(role: PlannerRole) {
+  return plannerRoles.find(item => item.value === role)?.label ?? role;
 }
 
 export function SettingsPanel({ profiles, norms, version, loading, error, onReload }: Props) {
@@ -36,6 +66,14 @@ export function SettingsPanel({ profiles, norms, version, loading, error, onRelo
     groups.indexOf(a.group_name as typeof groups[number]) - groups.indexOf(b.group_name as typeof groups[number])
     || a.display_name.localeCompare(b.display_name, "pl")
   ), [profiles]);
+
+  const planningOrder = useMemo(() => [...profiles]
+    .filter(person => person.active)
+    .sort((a,b) =>
+      roleOrder.indexOf(a.planner_role) - roleOrder.indexOf(b.planner_role)
+      || a.allocation_rank - b.allocation_rank
+      || a.display_name.localeCompare(b.display_name, "pl")
+    ), [profiles]);
 
   useEffect(() => {
     const current = profiles.find(p => p.employee_key === selectedKey) ?? profiles[0];
@@ -120,7 +158,7 @@ export function SettingsPanel({ profiles, norms, version, loading, error, onRelo
                       className={person.employee_key===selectedKey ? "settings-person selected" : "settings-person"}
                       onClick={()=>selectPerson(person.employee_key)}>
                       <span>{person.display_name}</span>
-                      <small>{person.active ? (person.can_pick ? "PICK" : "") + (person.can_pick && person.can_pack ? " · " : "") + (person.can_pack ? "PAK" : "") || "Bez operacji" : "Nieaktywny"}</small>
+                      <small>{person.active ? ((person.can_pick ? "PICK" : "") + (person.can_pick && person.can_pack ? " · " : "") + (person.can_pack ? "PAK" : "") || "Bez operacji") + " · " + roleLabel(person.planner_role) : "Nieaktywny"}</small>
                     </button>
                   ))}
                 </div>
@@ -147,14 +185,45 @@ export function SettingsPanel({ profiles, norms, version, loading, error, onRelo
                   <label className="settings-check"><input type="checkbox" checked={draft.can_pack} onChange={e=>setDraft({...draft,can_pack:e.target.checked})}/> Może realizować PAK</label>
                 </fieldset>
                 <div className="settings-fields-pair">
+                  <div className="settings-field">
+                    <label htmlFor="settings-role">Rola w planerze</label>
+                    <select id="settings-role" value={draft.planner_role} onChange={e=>setDraft({...draft,planner_role:e.target.value as PlannerRole})}>
+                      {plannerRoles.map(role=><option key={role.value} value={role.value}>{role.label}</option>)}
+                    </select>
+                    <small>{plannerRoles.find(role=>role.value===draft.planner_role)?.hint}</small>
+                  </div>
+                  <div className="settings-field">
+                    <label htmlFor="settings-rank">Kolejność w roli</label>
+                    <input id="settings-rank" type="number" min="1" max="99" step="1" value={draft.allocation_rank} onChange={e=>setDraft({...draft,allocation_rank:Number(e.target.value)})}/>
+                  </div>
+                </div>
+                <div className="settings-fields-pair">
+                  <div className="settings-field">
+                    <label htmlFor="settings-preferred">Preferowany proces</label>
+                    <select id="settings-preferred" value={draft.preferred_process} onChange={e=>setDraft({...draft,preferred_process:e.target.value as PreferredProcess})}>
+                      {preferredProcesses.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="settings-field">
+                    <label htmlFor="settings-aux">Zadania pomocnicze</label>
+                    <select id="settings-aux" value={draft.auxiliary_policy} onChange={e=>setDraft({...draft,auxiliary_policy:e.target.value as AuxiliaryPolicy})}>
+                      {auxiliaryPolicies.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <label className="settings-check">
+                  <input type="checkbox" checked={draft.supervisor_guard} onChange={e=>setDraft({...draft,supervisor_guard:e.target.checked})}/>
+                  Chronić nadzór — ostatni dostępny lider nie może trafić do PICK/PAK
+                </label>
+                <div className="settings-fields-pair">
                   <div className="settings-field"><label htmlFor="settings-es">Login EasyStorage <small>(opcjonalny)</small></label>
                     <input id="settings-es" autoComplete="off" value={draft.es_login} maxLength={100} placeholder="Login operatora ES" onChange={e=>setDraft({...draft,es_login:e.target.value})}/></div>
-                  <div className="settings-field"><label htmlFor="settings-limit">Maks. godzin/dzień <small>(0 = bez limitu)</small></label>
+                  <div className="settings-field"><label htmlFor="settings-limit">Maks. godzin operacyjnych/dzień <small>(0 = bez limitu)</small></label>
                     <input id="settings-limit" type="number" min="0" max="24" step="0.25" value={draft.max_hours} onChange={e=>setDraft({...draft,max_hours:Number(e.target.value)})}/></div>
                 </div>
                 <label className="settings-check settings-active"><input type="checkbox" checked={draft.active} onChange={e=>setDraft({...draft,active:e.target.checked})}/> Pracownik aktywny</label>
                 <div className="settings-editor-footer">
-                  <p>Nowe osoby: <b>Wydanie + PICK + PAK</b>. Ich ustawienia nie są nadpisywane kolejnym importem grafiku.</p>
+                  <p>Nowe osoby: <b>Wydanie podstawowe + PICK + PAK</b>. Import grafiku nie nadpisuje ręcznej konfiguracji profilu.</p>
                   <button type="button" className="button button-primary" disabled={saving || loading} onClick={()=>save("saveEmployee")}>{saving ? "Zapisywanie…" : "Zapisz profil"}</button>
                 </div>
               </>
@@ -186,9 +255,20 @@ export function SettingsPanel({ profiles, norms, version, loading, error, onRelo
 
       {tab === "planning" && (
         <section className="card settings-norms">
-          <div className="settings-card-heading"><div><p className="eyebrow">ETAP ALGORYTMU</p><h2>Reguły planowania</h2></div></div>
-          <p className="settings-paragraph">Priorytet cutoffów, bufor PAK, kolejność delegowania pracowników z przyjęć, ograniczenia Aliny i Ani oraz reguły ponownego przeliczania zostaną udostępnione do edycji wraz z silnikiem planowania.</p>
-          <p className="settings-paragraph">Na obecnym etapie aplikacja pobiera i klasyfikuje realny grafik; nie generuje jeszcze przydziałów PICK/PAK.</p>
+          <div className="settings-card-heading"><div><p className="eyebrow">LOGIKA GENERATORA</p><h2>Reguły planowania</h2></div></div>
+          <p className="settings-paragraph"><b>Kolejność zasobów:</b> Wydanie podstawowe → Wsparcie Przyjęć → Rezerwa specjalistyczna → Lider / rezerwa → Ostatnia rezerwa.</p>
+          <p className="settings-paragraph"><b>Przyjęcia:</b> planner uruchamia wsparcie pojedynczo według „Kolejności w roli” i stara się zostawić minimum jedną dostępną osobę na Przyjęciu.</p>
+          <p className="settings-paragraph"><b>Nadzór:</b> przy włączonej ochronie generator nie przydzieli ostatniego dostępnego lidera do PICK/PAK.</p>
+          <p className="settings-paragraph"><b>Dyżur:</b> blok dyżuru z grafiku ma pierwszeństwo przed PICK/PAK. Preferowany proces i zadania pomocnicze ustawiasz w profilu pracownika.</p>
+          <div className="settings-list-group">
+            <p>Aktualna kolejność <span>{planningOrder.length}</span></p>
+            {planningOrder.map(person => (
+              <div className="settings-person" key={person.employee_key}>
+                <span>{person.display_name}</span>
+                <small>{roleLabel(person.planner_role)} · kolejność {person.allocation_rank} · {person.preferred_process === "pick" ? "PICK" : person.preferred_process === "pack" ? "PAK" : "bez preferencji"}{person.supervisor_guard ? " · NADZÓR" : ""}</small>
+              </div>
+            ))}
+          </div>
         </section>
       )}
     </section>
