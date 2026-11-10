@@ -145,6 +145,10 @@ export type OrderFlow = {
 
 export type AppTab = "work" | "orders" | "settings";
 
+export type PlannerRole = "standard" | "receiving_support" | "specialist_reserve" | "leader_reserve" | "last_resort";
+export type PreferredProcess = "balanced" | "pick" | "pack";
+export type AuxiliaryPolicy = "none" | "clean_then_returns";
+
 export type EmployeeProfile = {
   employee_key: string;
   display_name: string;
@@ -154,6 +158,11 @@ export type EmployeeProfile = {
   active: boolean;
   es_login: string;
   max_hours: number;
+  planner_role: PlannerRole;
+  allocation_rank: number;
+  preferred_process: PreferredProcess;
+  supervisor_guard: boolean;
+  auxiliary_policy: AuxiliaryPolicy;
   updated_at?: string | null;
 };
 
