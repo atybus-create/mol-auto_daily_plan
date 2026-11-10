@@ -5,10 +5,12 @@ import {
   formatNumber,
   targetFor,
 } from "@/lib/plan-utils";
-import type { Employee, GeneratedPlanSummary, OrdersDemandSnapshot, ProcessKind, PlannerNorms } from "@/types/plan";
+import type { Employee, EmployeeProfile, ExecutionSnapshotResponse, GeneratedPlanSummary, OrdersDemandSnapshot, ProcessKind, PlannerNorms } from "@/types/plan";
 
 type WorkPlanProps = {
   employees: Employee[];
+  profiles: EmployeeProfile[];
+  execution: ExecutionSnapshotResponse | null;
   norms: PlannerNorms;
   date: string;
   demand: OrdersDemandSnapshot | null;
@@ -27,6 +29,8 @@ const processes: ProcessKind[] = ["pick", "pack"];
 
 export function WorkPlan({
   employees,
+  profiles,
+  execution,
   norms,
   date,
   demand,
@@ -52,6 +56,55 @@ export function WorkPlan({
     }),
     { pickGoal: 0, packGoal: 0, hours: 0 },
   );
+
+  const profileMap = new Map(profiles.map(profile => [profile.employee_key, profile]));
+  const operatorMap = new Map(
+    (execution?.latest?.operators ?? []).map(operator => [normalizeEsLogin(operator.operator), operator]),
+  );
+  const pickToPackRatio = norms.pack_per_hour > 0 ? norms.pick_per_hour / norms.pack_per_hour : 3;
+
+  const performanceRows = employees
+    .map(employee => {
+      const profile = profileMap.get(employee.id);
+      if (!profile || !profile.active || (!profile.can_pick && !profile.can_pack)) return null;
+
+      const pickMinutes = minutesByKind(employee, "pick");
+      const packMinutes = minutesByKind(employee, "pack");
+      const pickPlanned = (pickMinutes / 60) * norms.pick_per_hour;
+      const packPlanned = (packMinutes / 60) * norms.pack_per_hour;
+
+      const esLogin = normalizeEsLogin(profile.es_login);
+      const operator = esLogin ? operatorMap.get(esLogin) : undefined;
+      const pickActual = operator ? Number(operator.pick_completed) || 0 : null;
+      const packActual = operator ? Number(operator.pack_completed) || 0 : null;
+
+      const plannedEquivalent = pickToPackRatio > 0
+        ? pickPlanned / pickToPackRatio + packPlanned
+        : 0;
+      const actualEquivalent = operator && pickToPackRatio > 0
+        ? pickActual! / pickToPackRatio + packActual!
+        : null;
+      const realization = actualEquivalent !== null && plannedEquivalent > 0
+        ? (actualEquivalent / plannedEquivalent) * 100
+        : null;
+
+      return {
+        id: employee.id,
+        name: employee.name,
+        group: employee.group,
+        pickPlanned,
+        packPlanned,
+        pickActual,
+        packActual,
+        realization,
+        mapping: !profile.es_login?.trim() ? "missing_login" as const : operator ? "ok" as const : "no_data" as const,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  const executionTimestamp = execution?.latest?.collected_at
+    ? new Date(execution.latest.collected_at).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <section id="work-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-work">
@@ -126,6 +179,71 @@ export function WorkPlan({
           <span className="cutoff-item"><b>+15 min</b> dopakowanie</span>
         </div>
       </section>
+
+      {hasOperationalPlan && performanceRows.length > 0 && (
+        <section className="operator-performance-card card" aria-labelledby="operator-performance-title">
+          <div className="section-heading operator-performance-heading">
+            <div>
+              <p className="eyebrow">PLAN VS WYKONANIE</p>
+              <h2 id="operator-performance-title">Realizacja planu per pracownik</h2>
+            </div>
+            <div className="operator-performance-source">
+              <span className="refresh-dot" />
+              <span>{executionTimestamp ? `EasyStorage · raport efektywności · ${executionTimestamp}` : "Brak aktualnego raportu efektywności ES"}</span>
+            </div>
+          </div>
+          <div className="operator-performance-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Pracownik</th>
+                  <th scope="col">PICK plan / wykonanie</th>
+                  <th scope="col">PAK plan / wykonanie</th>
+                  <th scope="col">Realizacja</th>
+                </tr>
+              </thead>
+              <tbody>
+                {performanceRows.map(row => (
+                  <tr key={row.id}>
+                    <td>
+                      <div className="operator-person">
+                        <strong>{row.name}</strong>
+                        <small>{row.group}</small>
+                        {row.mapping === "missing_login" && <span className="mapping-warning">Brak loginu ES</span>}
+                        {row.mapping === "no_data" && <span className="mapping-warning">Brak danych operatora w ES</span>}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="plan-actual-value">
+                        <b>{formatCapacity(row.pickPlanned)}</b>
+                        <i>/</i>
+                        <strong>{row.pickActual === null ? "—" : formatNumber(row.pickActual)}</strong>
+                      </span>
+                    </td>
+                    <td>
+                      <span className="plan-actual-value">
+                        <b>{formatCapacity(row.packPlanned)}</b>
+                        <i>/</i>
+                        <strong>{row.packActual === null ? "—" : formatNumber(row.packActual)}</strong>
+                      </span>
+                    </td>
+                    <td>
+                      {row.realization === null
+                        ? <span className="realization-badge unavailable">—</span>
+                        : <span className={`realization-badge ${realizationClass(row.realization)}`}>{Math.round(row.realization)}%</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="operator-performance-note">
+            <span>Plan: bloki PICK/PAK × aktualne normy.</span>
+            <span>Wykonanie: raport efektywności EasyStorage, mapowanie po loginie ES.</span>
+            <span>Realizacja: 1 PAK = {formatCapacity(pickToPackRatio)} PICK.</span>
+          </div>
+        </section>
+      )}
 
       {!hasOperationalPlan ? (
         <section className="source-ready-card card" aria-label="Status danych wejściowych">
@@ -220,4 +338,31 @@ function formatMaybe(value: number | null | undefined) {
 
 function formatHours(value: number | null | undefined) {
   return typeof value === "number" ? `${value.toFixed(2).replace(".", ",")} h` : "—";
+}
+
+
+function minutesByKind(employee: Employee, kind: ProcessKind) {
+  return employee.blocks
+    .filter(block => block.kind === kind)
+    .reduce((sum, block) => sum + Math.max(0, timeToMinutes(block.end) - timeToMinutes(block.start)), 0);
+}
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return (Number(hours) || 0) * 60 + (Number(minutes) || 0);
+}
+
+function normalizeEsLogin(value: string | null | undefined) {
+  return String(value ?? "").trim().toLocaleLowerCase("pl-PL");
+}
+
+function formatCapacity(value: number) {
+  const rounded = Math.round(value * 10) / 10;
+  return rounded.toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+}
+
+function realizationClass(value: number) {
+  if (value >= 100) return "good";
+  if (value >= 90) return "near";
+  return "behind";
 }
