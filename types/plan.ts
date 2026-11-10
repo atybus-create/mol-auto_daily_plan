@@ -165,7 +165,10 @@ export type PlannerNorms = {
 };
 
 
-export type GeneratedPlanBlock = ActivityBlock & {
+export type GeneratedPlanBlock = {
+  start: string;
+  end: string;
+  activity: ActivityKind;
   source: "auto" | "manual";
   reason: string;
 };
