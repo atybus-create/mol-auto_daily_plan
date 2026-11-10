@@ -132,13 +132,29 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                 </tbody>
                 <tfoot>
                   {v2 ? (
-                    <tr>
-                      <td>Aktualny dzień</td>
-                      <td>{formatMaybe(demand.required_today_baseline)}</td>
-                      <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
-                      <td className={varianceClass(demand.correction_vs_plan)}>{formatSigned(demand.correction_vs_plan)}</td>
-                      <td>{formatMaybe(demand.corrected_required_today)}</td>
-                    </tr>
+                    <>
+                      <tr>
+                        <td>Zakończone sloty do {demand.real_inflow_to_now.last_slot_end || "teraz"}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.forecast_eligible_for_measured_slots)}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
+                        <td className={varianceClass(demand.correction_vs_plan)}>{formatSigned(demand.correction_vs_plan)}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
+                      </tr>
+                      <tr>
+                        <td>Pozostało {demand.real_inflow_to_now.last_slot_end || "teraz"}–16:00</td>
+                        <td>{formatNumber(demand.remaining_forecast.eligible_today)}</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>{formatNumber(demand.remaining_forecast.eligible_today)}</td>
+                      </tr>
+                      <tr>
+                        <td>Napływ 06:00–16:00</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.forecast_eligible_for_measured_slots + demand.remaining_forecast.eligible_today)}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}<small className="after-cutoff"> do teraz</small></td>
+                        <td className={varianceClass(demand.correction_vs_plan)}>{formatSigned(demand.correction_vs_plan)}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual + demand.remaining_forecast.eligible_today)}</td>
+                      </tr>
+                    </>
                   ) : (
                     <tr>
                       <td>Razem · 06:00–16:00</td>
