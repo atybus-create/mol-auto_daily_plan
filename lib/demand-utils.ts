@@ -163,3 +163,78 @@ export function validateDayDemandSnapshot(value: unknown, requestedDate?: string
 export function asDayDemandSnapshot(value: unknown, requestedDate?: string): DayDemandSnapshot | null {
   return validateDayDemandSnapshot(value, requestedDate).valid ? value as DayDemandSnapshot : null;
 }
+
+
+export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: string): DemandValidation {
+  if (!isRecord(value) || value.contract_version !== 2) return validateDayDemandSnapshot(value, requestedDate);
+
+  const baselineRequired = value.required_today_baseline;
+  const plan = isRecord(value.plan_gross) ? value.plan_gross : null;
+  const baselineAfter = plan && isNonNegativeNumber(plan.total) && isNonNegativeNumber(baselineRequired)
+    ? plan.total - baselineRequired
+    : null;
+
+  const baselineView = {
+    ...value,
+    required_today: baselineRequired,
+    after_cutoff: baselineAfter,
+  };
+  const errors = [...validateDayDemandSnapshot(baselineView, requestedDate).errors];
+
+  for (const key of ["required_today_baseline", "corrected_required_today", "corrected_plan_gross_total"] as const) {
+    if (value[key] !== null && !isNonNegativeNumber(value[key])) errors.push(`${key}: oczekiwano liczby nieujemnej albo null`);
+  }
+  if (typeof value.correction_vs_plan !== "number" || !Number.isFinite(value.correction_vs_plan)) {
+    errors.push("correction_vs_plan: oczekiwano liczby");
+  }
+
+  if (!isRecord(value.real_inflow_to_now)) {
+    errors.push("real_inflow_to_now: brak danych");
+  } else {
+    for (const key of ["measured_slots", "eligible_actual", "all_actual", "pl_actual", "under_actual", "forecast_eligible_for_measured_slots"] as const) {
+      if (!isNonNegativeNumber(value.real_inflow_to_now[key])) errors.push(`real_inflow_to_now.${key}: oczekiwano liczby nieujemnej`);
+    }
+    if (typeof value.real_inflow_to_now.variance !== "number" || !Number.isFinite(value.real_inflow_to_now.variance)) {
+      errors.push("real_inflow_to_now.variance: oczekiwano liczby");
+    }
+  }
+
+  if (!isRecord(value.remaining_forecast)) {
+    errors.push("remaining_forecast: brak danych");
+  } else {
+    for (const key of ["eligible_today", "after_cutoff", "gross_total", "pl", "under"] as const) {
+      if (!isNonNegativeNumber(value.remaining_forecast[key])) errors.push(`remaining_forecast.${key}: oczekiwano liczby nieujemnej`);
+    }
+  }
+
+  if (Array.isArray(value.slots)) {
+    value.slots.forEach((slot, index) => {
+      if (!isRecord(slot)) return;
+      if (!["actual", "forecast"].includes(String(slot.effective_source))) {
+        errors.push(`slots[${index}].effective_source: nieprawidłowe źródło`);
+      }
+      if (!isNonNegativeNumber(slot.effective_today)) {
+        errors.push(`slots[${index}].effective_today: oczekiwano liczby nieujemnej`);
+      }
+      if (slot.variance_to_forecast !== null && (typeof slot.variance_to_forecast !== "number" || !Number.isFinite(slot.variance_to_forecast))) {
+        errors.push(`slots[${index}].variance_to_forecast: oczekiwano liczby albo null`);
+      }
+      if (slot.actual !== null && slot.actual !== undefined) {
+        if (!isRecord(slot.actual)) {
+          errors.push(`slots[${index}].actual: nieprawidłowy rekord`);
+        } else {
+          for (const key of ["pl", "under", "eligible_total", "all_orders", "sr_total", "bl_total", "rejected_allegro_one", "rejected_other_after12"] as const) {
+            if (!isNonNegativeNumber(slot.actual[key])) errors.push(`slots[${index}].actual.${key}: oczekiwano liczby nieujemnej`);
+          }
+        }
+      }
+    });
+  }
+
+  if (isNonNegativeNumber(value.required_today) && isNonNegativeNumber(value.corrected_required_today)
+      && Math.abs(value.required_today - value.corrected_required_today) > 0.001) {
+    errors.push("required_today: powinno być równe corrected_required_today w kontrakcie V2");
+  }
+
+  return { valid: errors.length === 0, errors };
+}
