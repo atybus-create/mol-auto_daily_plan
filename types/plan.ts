@@ -238,11 +238,18 @@ export type GeneratedPlanError = {
 };
 
 
+export type ExecutionOperator = {
+  operator: string;
+  pick_completed: number;
+  pack_completed: number;
+};
+
 export type ExecutionSnapshotLatest = {
   snapshot_id: string | null;
   pick_completed: number;
   pack_completed: number;
   operators_count: number;
+  operators: ExecutionOperator[];
   collected_at: string | null;
   age_minutes: number;
   data_status: string;
