@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
-import type { AppTab, Employee, EmployeeProfile, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms } from "@/types/plan";
+import type { AppTab, Employee, EmployeeProfile, GeneratedPlanError, GeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
 type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
@@ -37,6 +37,8 @@ export function PlanDashboard() {
   const [demand, setDemand] = useState<OrdersDemandSnapshot | null>(null);
   const [demandLoading, setDemandLoading] = useState(true);
   const [demandError, setDemandError] = useState("");
+  const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlanResponse | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -129,6 +131,52 @@ export function PlanDashboard() {
       }));
   }, [profiles, schedule]);
 
+  useEffect(() => { setGeneratedPlan(null); }, [date, reload]);
+
+  const plannedEmployees = useMemo<Employee[]>(() => {
+    if (!generatedPlan) return employees;
+    const scheduleMap = new Map(schedule.map(row => [row.id, row]));
+    return generatedPlan.employees.map(person => ({
+      id: person.employee_key,
+      name: person.display_name,
+      group: person.group_name,
+      duty: Boolean(scheduleMap.get(person.employee_key)?.duty),
+      progress: { pick: 0, pack: 0 },
+      blocks: person.blocks.map(block => ({
+        start: block.start,
+        end: block.end,
+        kind: block.activity,
+      })),
+    }));
+  }, [employees, generatedPlan, schedule]);
+
+  async function generatePlan() {
+    if (planLoading || !demand || demand.status !== "ready") return;
+    setPlanLoading(true);
+    setToast("");
+    try {
+      const response = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, demand }),
+      });
+      const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
+      if (!response.ok || !result.ok) {
+        throw new Error(result.ok ? "Nie udało się wygenerować planu." : (result.message || result.error));
+      }
+      setGeneratedPlan(result);
+      setActiveTab("work");
+      const detail = result.status === "DRAFT_READY"
+        ? "Plan roboczy wygenerowany."
+        : `Plan wygenerowany z brakiem capacity: ${result.shortages.map(item => `${item.process} ${item.missing_rbh} RBH`).join(" · ")}`;
+      setToast(detail);
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Błąd generatora planu.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
   const refresh = () => { setReload(x => x + 1); };
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
@@ -154,7 +202,7 @@ export function PlanDashboard() {
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
           <button className="button button-secondary" type="button" disabled={scheduleLoading || configLoading} onClick={refresh}>↻ Odśwież dane</button>
-          <button className="button button-primary" type="button" disabled title="Uruchomienie po podłączeniu algorytmu planowania">Przelicz plan</button>
+          <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading || demandLoading || !demand || demand.status !== "ready"} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>
           <form action="/api/auth/logout" method="post" className="logout-form">
             <button className="button button-secondary logout-button" type="submit">Wyloguj</button>
           </form>
@@ -173,7 +221,7 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={employees} norms={norms} date={date} demand={demand} collapsed={collapsed} editingEnabled={false}
+          <WorkPlan employees={plannedEmployees} norms={norms} date={date} demand={demand} planSummary={generatedPlan?.summary ?? null} planStatus={generatedPlan?.status ?? null} planGeneratedAt={generatedPlan?.generated_at ?? null} collapsed={collapsed} editingEnabled={false}
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
