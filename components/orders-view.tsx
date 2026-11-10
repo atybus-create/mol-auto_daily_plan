@@ -1,5 +1,5 @@
 import { formatNumber } from "@/lib/plan-utils";
-import type { CourierGroup, DayDemandV2Snapshot, OrdersDemandSnapshot } from "@/types/plan";
+import type { CorrectedForecastSlot, CourierGroup, DayDemandV2Snapshot, OrdersDemandSnapshot } from "@/types/plan";
 
 type OrdersViewProps = { demand: OrdersDemandSnapshot | null; loading: boolean; error: string };
 
@@ -99,7 +99,7 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                 <tbody>
                   {demand.slots.map(slot => {
                     if (v2) {
-                      const corrected = slot;
+                      const corrected = slot as CorrectedForecastSlot;
                       return (
                         <tr key={slot.slot_start}>
                           <td>{slot.slot_start}–{slot.slot_end}</td>
