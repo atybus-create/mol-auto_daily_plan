@@ -1,7 +1,5 @@
 import { Schedule } from "@/components/schedule";
 import {
-  currentActual,
-  currentPlan,
   dailyWorkedHours,
   formatLongDate,
   formatNumber,
@@ -46,11 +44,9 @@ export function WorkPlan({
     (result, employee) => ({
       pickGoal: result.pickGoal + targetFor(employee, "pick", norms),
       packGoal: result.packGoal + targetFor(employee, "pack", norms),
-      pickDone: result.pickDone + currentActual(employee, "pick", norms),
-      packDone: result.packDone + currentActual(employee, "pack", norms),
       hours: result.hours + dailyWorkedHours(employee),
     }),
-    { pickGoal: 0, packGoal: 0, pickDone: 0, packDone: 0, hours: 0 },
+    { pickGoal: 0, packGoal: 0, hours: 0 },
   );
 
   return (
