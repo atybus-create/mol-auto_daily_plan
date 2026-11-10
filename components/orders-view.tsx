@@ -1,127 +1,57 @@
-import { formatNumber, formatTime, timeToMinutes } from "@/lib/plan-utils";
-import type { OrderFlow } from "@/types/plan";
+import { formatNumber } from "@/lib/plan-utils";
+import type { CourierGroup, DayDemandSnapshot } from "@/types/plan";
 
-type OrdersViewProps = {
-  flow: OrderFlow;
+type OrdersViewProps = { demand: DayDemandSnapshot | null; loading: boolean; error: string };
+
+const courierNames: Record<CourierGroup, string> = {
+  allegro_one: "Allegro One", inpost_orlen: "InPost / Orlen", other: "Pozostali", unknown: "Nierozpoznani",
 };
 
-type OrderRow = {
-  label: string;
-  planPL: number;
-  planUnder: number;
-  actualPL: number | null;
-  actualUnder: number | null;
-  isCurrent: boolean;
-};
-
-export function OrdersView({ flow }: OrdersViewProps) {
-  const observedSlotCount = (timeToMinutes(flow.observedThrough) - 6 * 60) / 30;
-  const rows: OrderRow[] = Array.from({ length: 24 }, (_, slot) => {
-    const start = 6 * 60 + slot * 30;
-    const observed = slot < observedSlotCount;
-    return {
-      label: `${formatTime(start)}–${formatTime(start + 30)}`,
-      planPL: flow.plannedPL[slot] ?? 0,
-      planUnder: flow.plannedUnder[slot] ?? 0,
-      actualPL: observed ? (flow.actualPL[slot] ?? 0) : null,
-      actualUnder: observed ? (flow.actualUnder[slot] ?? 0) : null,
-      isCurrent: start === timeToMinutes(flow.observedThrough),
-    };
-  });
-
-  const planDay = rows.reduce((result, row) => ({ pl: result.pl + row.planPL, under: result.under + row.planUnder }), { pl: 0, under: 0 });
-  const observedRows = rows.filter((row) => row.actualPL !== null && row.actualUnder !== null);
-  const toNow = observedRows.reduce((result, row) => ({
-    planPL: result.planPL + row.planPL,
-    planUnder: result.planUnder + row.planUnder,
-    actualPL: result.actualPL + (row.actualPL ?? 0),
-    actualUnder: result.actualUnder + (row.actualUnder ?? 0),
-  }), { planPL: 0, planUnder: 0, actualPL: 0, actualUnder: 0 });
-  const morningTotal = flow.morningPL + flow.morningUnder;
-  const forecastToCutoff = flow.plannedPL.slice(0, 20).reduce((sum, value) => sum + value, 0) + flow.plannedUnder.slice(0, 20).reduce((sum, value) => sum + value, 0);
-  const totalVariance = (toNow.actualPL + toNow.actualUnder) - (toNow.planPL + toNow.planUnder);
-
+export function OrdersView({ demand, loading, error }: OrdersViewProps) {
+  if (loading) return <OrdersState title="Pobieranie planu zamówień…" detail="Łączę pulę z 06:00 z prognozą półgodzinową." />;
+  if (error || !demand) return <OrdersState title="Plan zamówień jest niedostępny" detail={error || "Brak danych dla wybranego dnia."} />;
+  const { morning, forecast, plan_gross: gross } = demand;
+  const statusLabel = demand.status === "ready" ? "Gotowy" : demand.status === "stale" ? "Dane nieaktualne" : "Plan częściowy";
   return (
     <section id="orders-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-orders">
       <section className="page-intro orders-intro">
-        <div><p className="eyebrow">WOLUMEN ZAMÓWIEŃ</p><h1>Plan i napływ zamówień</h1><p className="subtitle">Poranna pula, prognoza półgodzinowa i rzeczywisty napływ .PL oraz _PL.</p></div>
-        <div className="intro-meta"><span className="mode-badge"><i /> Wersja demonstracyjna</span><span>Stan przykładowy: {flow.observedThrough}</span></div>
+        <div><p className="eyebrow">WOLUMEN ZAMÓWIEŃ</p><h1>Plan i prognozowany napływ</h1><p className="subtitle">Rzeczywista pula o 06:00 oraz 20 prognozowanych bloków do 16:00.</p></div>
+        <div className="intro-meta"><span className={`mode-badge demand-${demand.status}`}><i /> {statusLabel}</span><span>Model {demand.model_version || "—"} · trening do {demand.trained_until || "—"}</span></div>
       </section>
-
-      <div className="orders-summary">
-        {[
-          ["Pula startowa · 06:00", morningTotal, "zamówień"],
-          [".PL · oczekujące", flow.morningPL, "zamówień"],
-          ["_PL · oczekujące", flow.morningUnder, "zamówień"],
-          ["Prognozowany napływ", forecastToCutoff, "06:00–16:00 · demonstracyjnie"],
-        ].map(([label, value, detail]) => (
-          <div className="order-stat" key={String(label)}><span>{label}</span><strong>{formatNumber(Number(value))}</strong><small>{detail}</small></div>
-        ))}
+      {demand.warnings.length > 0 && <div className="demand-warning" role="status">{demand.warnings.join(" · ")}</div>}
+      <div className="orders-summary demand-summary">
+        <DemandCard label="Pula rano · 06:00" value={morning?.total} detail={morning ? `.PL ${formatNumber(morning.pl)} · _PL ${formatNumber(morning.under)}` : "Brak kompletnego snapshotu BL/SR"} />
+        <DemandCard label="Prognoza nowych · 06–16" value={forecast?.total} detail={forecast ? `zakres ${formatNumber(forecast.p10)}–${formatNumber(forecast.p90)}` : "Prognoza niedostępna"} />
+        <DemandCard label="Plan brutto" value={gross?.total} detail="rano + prognozowany napływ" accent />
+        <DemandCard label="Do realizacji dzisiaj" value={demand.required_today} detail={`po cutoffach · później ${formatMaybe(demand.after_cutoff)}`} />
       </div>
-
       <div className="orders-layout">
         <section className="card orders-table-card" aria-labelledby="orders-flow-title">
-          <div className="section-heading">
-            <div><p className="eyebrow">PLAN · RZECZYWISTOŚĆ</p><h2 id="orders-flow-title">Napływ w kolejnych przedziałach</h2></div>
-            <div className="refresh-info"><span className="refresh-dot" /><span>Docelowo: odświeżanie co 30 min</span></div>
-          </div>
-          <div className="table-wrap orders-flow-wrap">
-            <table>
-              <thead><tr><th rowSpan={2} scope="col">Godzina</th><th colSpan={3} scope="colgroup">Planowany napływ</th><th colSpan={3} scope="colgroup">Rzeczywisty napływ</th><th rowSpan={2} scope="col">Różnica<br />od planu</th></tr><tr><th scope="col">.PL</th><th scope="col">_PL</th><th scope="col">Suma</th><th scope="col">.PL</th><th scope="col">_PL</th><th scope="col">Suma</th></tr></thead>
-              <tbody>{rows.map((row) => {
-                const planSum = row.planPL + row.planUnder;
-                const actualSum = row.actualPL !== null && row.actualUnder !== null ? row.actualPL + row.actualUnder : null;
-                const variance = actualSum === null ? null : actualSum - planSum;
-                return (
-                  <tr className={row.isCurrent ? "current-slot" : undefined} key={row.label}>
-                    <td>{row.label}</td><td>{formatNumber(row.planPL)}</td><td>{formatNumber(row.planUnder)}</td><td>{formatNumber(planSum)}</td>
-                    <td>{row.actualPL === null ? "—" : formatNumber(row.actualPL)}</td><td>{row.actualUnder === null ? "—" : formatNumber(row.actualUnder)}</td><td>{actualSum === null ? "—" : formatNumber(actualSum)}</td>
-                    <td className={variance === null ? undefined : variance > 0 ? "variance-positive" : variance < 0 ? "variance-negative" : undefined}>{variance === null ? "—" : `${variance > 0 ? "+" : ""}${formatNumber(variance)}`}</td>
-                  </tr>
-                );
-              })}</tbody>
-              <tfoot>
-                <tr><td>Planowany napływ · cały dzień</td><td>{formatNumber(planDay.pl)}</td><td>{formatNumber(planDay.under)}</td><td>{formatNumber(planDay.pl + planDay.under)}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
-                <tr><td>Rzeczywisty · do {flow.observedThrough}</td><td>{formatNumber(toNow.planPL)}</td><td>{formatNumber(toNow.planUnder)}</td><td>{formatNumber(toNow.planPL + toNow.planUnder)}</td><td>{formatNumber(toNow.actualPL)}</td><td>{formatNumber(toNow.actualUnder)}</td><td>{formatNumber(toNow.actualPL + toNow.actualUnder)}</td><td className={totalVariance > 0 ? "variance-positive" : totalVariance < 0 ? "variance-negative" : undefined}>{formatSigned(totalVariance)}</td></tr>
-              </tfoot>
-            </table>
-          </div>
-          <div className="orders-table-note"><span><i className="note-dot plan-dot" />Prognoza / plan</span><span><i className="note-dot actual-dot" />Odczyt rzeczywisty</span><span>— brak odczytu w tej makiecie</span></div>
+          <div className="section-heading"><div><p className="eyebrow">PROGNOZA BAZOWA</p><h2 id="orders-flow-title">Napływ co 30 minut</h2></div><div className="refresh-info"><span className="refresh-dot" /><span>Etap 2 · bez korekty rzeczywistym spływem</span></div></div>
+          {demand.slots.length === 20 ? <div className="table-wrap orders-flow-wrap"><table>
+            <thead><tr><th>Godzina</th><th>.PL</th><th>_PL</th><th>Razem</th><th>Narastająco</th><th>Dzisiejszy cutoff</th><th>Kurierzy</th></tr></thead>
+            <tbody>{demand.slots.map(slot => <tr key={slot.slot_start}>
+              <td>{slot.slot_start}–{slot.slot_end}</td><td>{formatNumber(slot.forecast.pl)}</td><td>{formatNumber(slot.forecast.under)}</td><td><b>{formatNumber(slot.forecast.total)}</b></td><td>{formatNumber(slot.cumulative_plan_gross ?? slot.cumulative_forecast)}</td>
+              <td><span className="eligible-number">{formatNumber(slot.eligible_today)}</span>{slot.after_cutoff > 0 && <small className="after-cutoff"> +{formatNumber(slot.after_cutoff)} później</small>}</td>
+              <td><details className="courier-details"><summary>{slot.by_carrier.length} grupy</summary><div>{slot.by_carrier.map(carrier => <span key={carrier.group}>{courierNames[carrier.group]}: <b>{formatNumber(carrier.point)}</b></span>)}</div></details></td>
+            </tr>)}</tbody>
+            <tfoot><tr><td>Razem · 06:00–16:00</td><td>{formatMaybe(forecast?.pl)}</td><td>{formatMaybe(forecast?.under)}</td><td>{formatMaybe(forecast?.total)}</td><td>{formatMaybe(gross?.total)}</td><td>{formatNumber(demand.slots.reduce((sum, slot) => sum + slot.eligible_today, 0))}</td><td>—</td></tr></tfoot>
+          </table></div> : <div className="empty-state">Brak kompletnego zestawu 20 bloków dla tego dnia.</div>}
+          <div className="orders-table-note"><span>Prognoza bazowa pozostaje niezmienna przez dzień.</span><span>Rzeczywisty napływ i korekta będą Etapem 3.</span></div>
         </section>
-
         <aside className="orders-side">
-          <section className="card morning-card" aria-labelledby="morning-title">
-            <div className="section-heading"><div><p className="eyebrow">PULA STARTOWA</p><h2 id="morning-title">Zamówienia o 06:00</h2></div></div>
-            <div className="morning-total"><strong>{formatNumber(morningTotal)}</strong><span>zamówień do realizacji</span></div>
-            <div className="morning-breakdown"><div><span>.PL</span><b>{formatNumber(flow.morningPL)}</b></div><div><span>_PL</span><b>{formatNumber(flow.morningUnder)}</b></div></div>
-            <div className="morning-source">Zaległe i oczekujące z porannego importu</div>
-          </section>
-
-          <section className="card cutoff-card" aria-labelledby="cutoff-title">
-            <div className="section-heading"><div><p className="eyebrow">REGUŁY DNIA</p><h2 id="cutoff-title">Cutoffy kurierów</h2></div></div>
-            <div className="cutoff-day-label">Poniedziałek</div>
-            <CourierRows inpost="12:00" showLegend />
-            <div className="cutoff-day-label other-days">Wtorek–piątek</div>
-            <CourierRows inpost="16:00" />
-            <p className="cutoff-note">Godziny są regułami demonstracyjnymi; mapa metod dostawy do grup cutoffów będzie potwierdzona przed podłączeniem danych.</p>
-          </section>
+          <section className="card morning-card"><div className="section-heading"><div><p className="eyebrow">STRUKTURA PLANU</p><h2>Rano + nowe zamówienia</h2></div></div><div className="demand-equation"><span>{formatMaybe(morning?.total)}</span><i>+</i><span>{formatMaybe(forecast?.total)}</span><i>=</i><strong>{formatMaybe(gross?.total)}</strong></div><div className="morning-source">Snapshot: {demand.source_as_of ? new Date(demand.source_as_of).toLocaleString("pl-PL") : "—"}</div></section>
+          <section className="card cutoff-card"><div className="section-heading"><div><p className="eyebrow">REGUŁY DNIA</p><h2>Cutoffy kurierów</h2></div></div><div className="cutoff-rule"><b>do 10:00</b><span>wszystkie rozpoznane grupy</span></div><div className="cutoff-rule"><b>10:00–12:00</b><span>bez Allegro One</span></div><div className="cutoff-rule"><b>12:00–16:00</b><span>InPost / Orlen · wt–pt</span></div><p className="cutoff-note">Poniedziałek: InPost / Orlen do 12:00. Nierozpoznane metody liczymy konserwatywnie jako późniejsze.</p></section>
         </aside>
       </div>
     </section>
   );
 }
 
-function CourierRows({ inpost, showLegend = false }: { inpost: string; showLegend?: boolean }) {
-  return (
-    <>
-      {showLegend ? <div className="courier-legend"><span>Kurier</span><b>.PL</b><b>_PL</b></div> : null}
-      <div className="courier-row"><span>Wszyscy</span><b>12:00</b><b>12:00</b></div>
-      <div className="courier-row"><span>InPost</span><b>{inpost}</b><b>{inpost}</b></div>
-      <div className="courier-row"><span>Orlen Paczka</span><b>{inpost}</b><b>{inpost}</b></div>
-    </>
-  );
+function DemandCard({ label, value, detail, accent = false }: { label: string; value: number | null | undefined; detail: string; accent?: boolean }) {
+  return <div className={`order-stat${accent ? " plan-gross" : ""}`}><span>{label}</span><strong>{formatMaybe(value)}</strong><small>{detail}</small></div>;
 }
-
-function formatSigned(value: number) {
-  return `${value > 0 ? "+" : ""}${formatNumber(value)}`;
+function OrdersState({ title, detail }: { title: string; detail: string }) {
+  return <section id="orders-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-orders"><section className="page-intro"><div><p className="eyebrow">WOLUMEN ZAMÓWIEŃ</p><h1>{title}</h1><p className="subtitle">{detail}</p></div></section></section>;
 }
+function formatMaybe(value: number | null | undefined) { return typeof value === "number" ? formatNumber(value) : "—"; }

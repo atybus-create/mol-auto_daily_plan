@@ -7,12 +7,13 @@ import {
   formatNumber,
   targetFor,
 } from "@/lib/plan-utils";
-import type { Employee, ProcessKind, PlannerNorms } from "@/types/plan";
+import type { DayDemandSnapshot, Employee, ProcessKind, PlannerNorms } from "@/types/plan";
 
 type WorkPlanProps = {
   employees: Employee[];
   norms: PlannerNorms;
   date: string;
+  demand: DayDemandSnapshot | null;
   collapsed: boolean;
   editingEnabled: boolean;
   onToggleCollapsed: () => void;
@@ -25,6 +26,7 @@ export function WorkPlan({
   employees,
   norms,
   date,
+  demand,
   collapsed,
   editingEnabled,
   onToggleCollapsed,
@@ -61,6 +63,13 @@ export function WorkPlan({
           <span className="mode-badge"><i /> {hasOperationalPlan ? "Plan operacyjny" : "Grafik źródłowy"}</span>
           <span>{formatLongDate(date)}</span>
         </div>
+      </section>
+
+      <section className="work-demand-strip" aria-label="Wolumen do zaplanowania">
+        <WorkDemand label="Pula 06:00" value={demand?.morning?.total} />
+        <WorkDemand label="Prognoza 06–16" value={demand?.forecast?.total} />
+        <WorkDemand label="Plan brutto" value={demand?.plan_gross?.total} accent />
+        <WorkDemand label="Do realizacji dziś" value={demand?.required_today} />
       </section>
 
       <section className="legend" aria-label="Legenda czynności">
@@ -193,4 +202,8 @@ export function WorkPlan({
       )}
     </section>
   );
+}
+
+function WorkDemand({ label, value, accent = false }: { label: string; value: number | null | undefined; accent?: boolean }) {
+  return <div className={accent ? "accent" : undefined}><span>{label}</span><strong>{typeof value === "number" ? formatNumber(value) : "—"}</strong></div>;
 }

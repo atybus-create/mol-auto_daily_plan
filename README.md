@@ -5,12 +5,12 @@ Frontend aplikacji do planowania pracy magazynu ESTYL. Projekt działa jako apli
 ## Aktualny zakres
 
 - **Plan pracy** — pracownicy w wierszach, czas od 05:00 do 18:00 w kolumnach, siatka 15-minutowa, bloki czynności, cele dzienne oraz wykonanie narastające.
-- **Zamówienia** — poranna pula `.PL` i `_PL`, półgodzinowy plan napływu, dane rzeczywiste do godziny 10:00 i odchylenie od planu.
-- **Interakcje demonstracyjne** — zmiana daty, zwijanie zespołu, tryb edycji bloków, lokalne przeliczenie oraz nawigacja zakładek z klawiatury.
+- **Zamówienia** — rzeczywista pula `.PL` i `_PL` o 06:00, 20 półgodzinnych bloków prognozy 06:00–16:00, plan brutto oraz kwalifikacja według cutoffów kurierów.
+- **Plan pracy** — ten sam atomowy snapshot popytu jest widoczny nad grafikiem, dzięki czemu poranna pula i prognozowany napływ nie są liczone oddzielnie.
 - **Dostępność** — semantyczne zakładki, etykiety kontrolek, opisane paski postępu, widoczne focusy i respektowanie `prefers-reduced-motion`.
 - **Kontrola dostępu** — wspólne hasło aplikacji, podpisana sesja HTTP-only oraz ochrona ekranów i przyszłych endpointów API.
 
-Wszystkie dane są nadal przykładowe. Aplikacja nie łączy się jeszcze z n8n, EasyStorage, BaseLinker, SellRocket ani FTP i nie zapisuje zmian.
+Dane grafiku, konfiguracji, zamówień porannych i prognozy są pobierane przez podpisane endpointy Vercela z n8n. Brak prognozy lub źródła nie jest prezentowany jako zero.
 
 ## Struktura
 
@@ -19,6 +19,7 @@ app/                    routing, metadane i globalne style
 components/             interfejs i interakcje widoków
 lib/demo-data.ts        dane demonstracyjne
 lib/plan-utils.ts       obliczenia i formatowanie
+lib/demand-utils.ts     walidacja 20 slotów i spójności planu zamówień
 types/plan.ts           kontrakty TypeScript
 public/                 zasoby statyczne
 ```
@@ -46,6 +47,6 @@ Vercel jest połączony z repozytorium. Zmiana na gałęzi `main` uruchamia wdro
 
 Nie umieszczaj tokenów n8n ani danych produkcyjnych w kodzie frontendu. Integracja zostanie podłączona przez zabezpieczoną warstwę API.
 
-## Kolejny etap
+## Kontrakt prognozy
 
-Zdefiniowanie kontraktów danych aplikacja ↔ API ↔ n8n, w tym wspólnej odpowiedzi zawierającej `business_date`, `generated_at`, `source_as_of`, `status`, jednostki, rekordy i błędy.
+`GET /api/day-demand?date=YYYY-MM-DD` zwraca jeden wersjonowany snapshot: `morning`, `forecast`, `plan_gross`, `required_today`, `after_cutoff` i dokładnie 20 rekordów `slots`. Prognoza Etapu 2 pozostaje bazowa i niezmienna w ciągu dnia; korekta rzeczywistym spływem należy do Etapu 3.

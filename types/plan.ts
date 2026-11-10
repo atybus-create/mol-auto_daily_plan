@@ -17,6 +17,67 @@ export type Employee = {
   blocks: ActivityBlock[];
 };
 
+export type ForecastStatus = "ready" | "partial" | "stale" | "unavailable";
+export type ForecastQuality = "low" | "medium" | "good";
+export type CourierGroup = "allegro_one" | "inpost_orlen" | "other" | "unknown";
+export type SlotEligibility = "eligible" | "partial" | "next_day" | "unknown";
+
+export type DemandTotals = { pl: number; under: number; total: number };
+export type ForecastTotals = DemandTotals & { p10: number; p90: number };
+
+export type CourierForecast = {
+  group: CourierGroup;
+  point: number;
+  p10: number;
+  p90: number;
+  eligible_today: number;
+  after_cutoff: number;
+  eligibility: SlotEligibility;
+  cutoff_local: string | null;
+};
+
+export type ForecastSlot = {
+  slot_start: string;
+  slot_end: string;
+  forecast: ForecastTotals;
+  cumulative_forecast: number;
+  cumulative_plan_gross: number | null;
+  eligible_today: number;
+  after_cutoff: number;
+  by_carrier: CourierForecast[];
+};
+
+export type DayDemandSnapshot = {
+  ok: true;
+  business_date: string;
+  timezone: "Europe/Warsaw";
+  generated_at: string | null;
+  source_as_of: string | null;
+  model_version: string | null;
+  trained_until: string | null;
+  forecast_run_id: string | null;
+  forecast_kind: "DAILY_BASELINE";
+  status: ForecastStatus;
+  quality?: ForecastQuality;
+  morning: DemandTotals | null;
+  forecast: ForecastTotals | null;
+  plan_gross: DemandTotals | null;
+  required_today: number | null;
+  after_cutoff: number | null;
+  slots: ForecastSlot[];
+  warnings: string[];
+};
+
+export type DayDemandError = {
+  ok: false;
+  status: "unavailable";
+  error: string;
+  business_date?: string;
+};
+
+export type DayDemandResponse = DayDemandSnapshot | DayDemandError;
+
+/** @deprecated Kept only for legacy demo fixtures. Production uses DayDemandSnapshot. */
 export type OrderFlow = {
   plannedPL: number[];
   plannedUnder: number[];

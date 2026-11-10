@@ -2,11 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { MorningOrdersView } from "@/components/morning-orders-view";
+import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
-import { DEMO_DATE } from "@/lib/demo-data";
-import type { AppTab, Employee, EmployeeProfile, PlannerNorms } from "@/types/plan";
+import type { AppTab, DayDemandResponse, DayDemandSnapshot, Employee, EmployeeProfile, PlannerNorms } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
 type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
@@ -22,7 +21,7 @@ function defaultGroup(key: string) {
 
 export function PlanDashboard() {
   const [activeTab, setActiveTab] = useState<AppTab>("work");
-  const [date, setDate] = useState(DEMO_DATE);
+  const [date, setDate] = useState(() => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit" }));
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [scheduleVersion, setScheduleVersion] = useState<number | null>(null);
   const [sourceSheet, setSourceSheet] = useState<string | null>(null);
@@ -35,10 +34,9 @@ export function PlanDashboard() {
   const [reload, setReload] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState("");
-
-  useEffect(() => {
-    setDate(new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit" }));
-  }, []);
+  const [demand, setDemand] = useState<DayDemandSnapshot | null>(null);
+  const [demandLoading, setDemandLoading] = useState(true);
+  const [demandError, setDemandError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -94,6 +92,29 @@ export function PlanDashboard() {
     return () => controller.abort();
   }, [date, reload]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    async function readDemand() {
+      setDemandLoading(true);
+      try {
+        const response = await fetch(`/api/day-demand?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal });
+        const result = await response.json() as DayDemandResponse;
+        if (!response.ok || !result.ok) throw new Error(result.ok ? "Nie udało się pobrać planu zamówień." : result.error);
+        setDemand(result);
+        setDemandError("");
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setDemand(null);
+          setDemandError(err instanceof Error ? err.message : "Brak planu zamówień.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setDemandLoading(false);
+      }
+    }
+    readDemand();
+    return () => controller.abort();
+  }, [date, reload]);
+
   const employees = useMemo<Employee[]>(() => {
     const profileMap = new Map(profiles.map(p => [p.employee_key, p]));
     return schedule
@@ -111,7 +132,7 @@ export function PlanDashboard() {
   const refresh = () => { setReload(x => x + 1); };
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
-    { tab: "orders", title: "Zamówienia", hint: "stan 06:00" },
+    { tab: "orders", title: "Zamówienia", hint: "06:00 + prognoza" },
     { tab: "settings", title: "Ustawienia" },
   ];
 
@@ -152,11 +173,11 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={employees} norms={norms} date={date} collapsed={collapsed} editingEnabled={false}
+          <WorkPlan employees={employees} norms={norms} date={date} demand={demand} collapsed={collapsed} editingEnabled={false}
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
-        {activeTab === "orders" && <MorningOrdersView date={date} reload={reload} />}
+        {activeTab === "orders" && <OrdersView demand={demand} loading={demandLoading} error={demandError} />}
         {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} version={configVersion}
           loading={configLoading} error={configError} onReload={refresh}/>}
 
