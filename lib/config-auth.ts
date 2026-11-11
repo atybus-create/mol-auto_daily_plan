@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type ConfigAction = "read" | "saveEmployee" | "saveNorms" | "readMorningOrders" | "readDayDemand" | "readExecution" | "generatePlan";
+export type ConfigAction = "read" | "saveEmployee" | "saveNorms" | "readMorningOrders" | "readDayDemand" | "readExecution" | "generatePlan" | "getLatestPlan";
 export type SignedConfigEnvelope = {
   action: ConfigAction;
   issued_at: number;
@@ -24,7 +24,7 @@ export function signConfigEnvelope(envelope: SignedConfigEnvelope) {
 export function verifyConfigEnvelope(value: unknown, signature: unknown) {
   if (!value || typeof value !== "object" || typeof signature !== "string" || !/^[a-f0-9]{64}$/.test(signature)) return false;
   const envelope = value as SignedConfigEnvelope;
-  if (!["read", "saveEmployee", "saveNorms", "readMorningOrders", "readDayDemand", "readExecution", "generatePlan"].includes(envelope.action)) return false;
+  if (!["read", "saveEmployee", "saveNorms", "readMorningOrders", "readDayDemand", "readExecution", "generatePlan", "getLatestPlan"].includes(envelope.action)) return false;
   if (!Number.isSafeInteger(envelope.issued_at) || Math.abs(Date.now() - envelope.issued_at) > 60_000) return false;
   if (!envelope.payload || typeof envelope.payload !== "object" || Array.isArray(envelope.payload)) return false;
   const expected = Buffer.from(digest(envelope), "hex");
