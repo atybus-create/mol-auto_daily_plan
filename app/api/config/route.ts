@@ -5,7 +5,7 @@ import { signConfigEnvelope, type ConfigAction, type SignedConfigEnvelope } from
 export const runtime = "nodejs";
 
 const ROOT = "https://n8n.estyl.team/webhook/";
-type MutableConfigAction = Exclude<ConfigAction, "readMorningOrders" | "readDayDemand" | "readExecution" | "generatePlan">;
+type MutableConfigAction = Exclude<ConfigAction, "readMorningOrders" | "readDayDemand" | "readExecution" | "generatePlan" | "getLatestPlan">;
 
 const PATHS: Record<MutableConfigAction, string> = {
   read: "mol-auto-plan-config-read",

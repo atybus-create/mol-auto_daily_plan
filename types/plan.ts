@@ -229,12 +229,25 @@ export type GeneratedPlanResponse = {
   summary: GeneratedPlanSummary;
   shortages: PlanShortage[];
   employees: GeneratedPlanEmployee[];
+  revision?: {
+    version: number;
+    is_frozen: boolean;
+    frozen_at: string | null;
+  };
 };
 
 export type GeneratedPlanError = {
   ok: false;
   error: string;
   message?: string;
+};
+
+export type LatestGeneratedPlanResponse = {
+  ok: true;
+  business_date: string;
+  current: Record<string, unknown> | null;
+  plan: GeneratedPlanResponse | null;
+  history: Record<string, unknown> | unknown[] | null;
 };
 
 

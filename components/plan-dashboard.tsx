@@ -1,11 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
-import type { AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms } from "@/types/plan";
+import type { AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
 type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
@@ -41,6 +41,7 @@ export function PlanDashboard() {
   const [planLoading, setPlanLoading] = useState(false);
   const [execution, setExecution] = useState<ExecutionSnapshotResponse | null>(null);
   const [executionLoading, setExecutionLoading] = useState(true);
+  const latestPlanRequest = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -152,21 +153,46 @@ export function PlanDashboard() {
       }));
   }, [profiles, schedule]);
 
-  useEffect(() => { setGeneratedPlan(null); }, [date, reload]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const requestId = ++latestPlanRequest.current;
 
+    async function readLatestPlan() {
+      try {
+        const response = await fetch(`/api/plan?date=${encodeURIComponent(date)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const result = await response.json() as LatestGeneratedPlanResponse | GeneratedPlanError;
+        if (!response.ok || !result.ok) {
+          throw new Error(result.ok ? "Nie udało się odczytać zapisanego planu." : (result.message || result.error));
+        }
+        if (requestId === latestPlanRequest.current) setGeneratedPlan(result.plan);
+      } catch (err) {
+        if (!controller.signal.aborted && requestId === latestPlanRequest.current) {
+          setToast(err instanceof Error ? err.message : "Nie udało się odczytać zapisanego planu.");
+        }
+      }
+    }
+
+    readLatestPlan();
+    return () => controller.abort();
+  }, [date, reload]);
+
+  const currentGeneratedPlan = generatedPlan?.business_date === date ? generatedPlan : null;
   const targetOrders = demand?.required_today ?? null;
   const pickFactor = norms.pick_per_hour * norms.pick_seconds / 3600;
   const livePickRemaining = targetOrders !== null && execution?.latest
     ? Math.max(0, targetOrders * pickFactor - execution.latest.pick_completed)
-    : generatedPlan?.summary.initial_pick_remaining ?? null;
+    : currentGeneratedPlan?.summary.initial_pick_remaining ?? null;
   const livePackRemaining = targetOrders !== null && execution?.latest
     ? Math.max(0, targetOrders - execution.latest.pack_completed)
-    : generatedPlan?.summary.initial_pack_remaining ?? null;
+    : currentGeneratedPlan?.summary.initial_pack_remaining ?? null;
 
   const plannedEmployees = useMemo<Employee[]>(() => {
-    if (!generatedPlan) return employees;
+    if (!currentGeneratedPlan) return employees;
     const scheduleMap = new Map(schedule.map(row => [row.id, row]));
-    return generatedPlan.employees.map(person => ({
+    return currentGeneratedPlan.employees.map(person => ({
       id: person.employee_key,
       name: person.display_name,
       group: person.group_name,
@@ -178,10 +204,11 @@ export function PlanDashboard() {
         kind: block.activity,
       })),
     }));
-  }, [employees, generatedPlan, schedule]);
+  }, [currentGeneratedPlan, employees, schedule]);
 
   async function generatePlan() {
     if (planLoading || !demand || demand.status !== "ready") return;
+    latestPlanRequest.current += 1;
     setPlanLoading(true);
     setToast("");
     try {
@@ -251,7 +278,7 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={generatedPlan?.summary ?? null} planStatus={generatedPlan?.status ?? null} planGeneratedAt={generatedPlan?.generated_at ?? null} collapsed={collapsed} editingEnabled={false}
+          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} collapsed={collapsed} editingEnabled={false}
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
