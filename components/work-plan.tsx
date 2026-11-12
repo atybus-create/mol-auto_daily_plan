@@ -106,7 +106,9 @@ export function WorkPlan({
         {hasSavedPlan && <span><i className="legend-swatch clean" />Porządki</span>}
         {hasSavedPlan && <span><i className="legend-swatch returns" />Zwroty</span>}
         <span className="legend-hint">
-          {hasSavedPlan ? "Plan można skorygować ręcznie" : "Godziny i dyżury pochodzą z miesięcznego grafiku MOL"}
+          {hasSavedPlan
+            ? (editingEnabled ? "Kliknij blok, aby ręcznie skorygować plan" : "Ręczna edycja chwilowo zablokowana podczas przeliczania")
+            : "Godziny i dyżury pochodzą z miesięcznego grafiku MOL"}
         </span>
       </section>
 
