@@ -20,6 +20,9 @@ type WorkPlanProps = {
   planSummary: GeneratedPlanSummary | null;
   planStatus: "DRAFT_READY" | "CAPACITY_SHORTAGE" | null;
   planGeneratedAt: string | null;
+  planAvailable: boolean;
+  planRestoreLoading: boolean;
+  planRestoreError: string;
   collapsed: boolean;
   editingEnabled: boolean;
   onToggleCollapsed: () => void;
@@ -40,14 +43,18 @@ export function WorkPlan({
   planSummary,
   planStatus,
   planGeneratedAt,
+  planAvailable,
+  planRestoreLoading,
+  planRestoreError,
   collapsed,
   editingEnabled,
   onToggleCollapsed,
   onBlockClick,
 }: WorkPlanProps) {
-  const hasOperationalPlan = employees.some((employee) =>
+  const hasOperationalBlocks = employees.some((employee) =>
     employee.blocks.some((block) => block.kind === "pick" || block.kind === "pack"),
   );
+  const hasSavedPlan = planAvailable;
 
   const totals = employees.reduce(
     (result, employee) => ({
@@ -71,13 +78,13 @@ export function WorkPlan({
           <p className="eyebrow">PLANOWANIE OPERACYJNE</p>
           <h1>Plan pracy zespołu</h1>
           <p className="subtitle">
-            {hasOperationalPlan
+            {hasSavedPlan
               ? "Obsada PICK i PAK, zadania dodatkowe oraz realizacja normy w jednym widoku."
               : "Grafik źródłowy z godzinami pracy i dyżurami. Przydział PICK / PAK zostanie wyliczony w kolejnym kroku."}
           </p>
         </div>
         <div className="intro-meta">
-          <span className="mode-badge"><i /> {hasOperationalPlan ? (planStatus === "CAPACITY_SHORTAGE" ? "Plan · brak capacity" : "Plan roboczy") : "Grafik źródłowy"}</span>
+          <span className="mode-badge"><i /> {hasSavedPlan ? (planStatus === "CAPACITY_SHORTAGE" ? "Plan · brak capacity" : "Plan roboczy") : "Grafik źródłowy"}</span>
           <span>{planGeneratedAt ? `Przeliczono ${new Date(planGeneratedAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}` : formatLongDate(date)}</span>
         </div>
       </section>
@@ -90,16 +97,16 @@ export function WorkPlan({
       </section>
 
       <section className="legend" aria-label="Legenda czynności">
-        <span className="legend-title">{hasOperationalPlan ? "CZYNNOŚCI" : "DANE Z GRAFIKU"}</span>
-        {!hasOperationalPlan && <span><i className="legend-swatch presence" />Obecność</span>}
-        {hasOperationalPlan && <span><i className="legend-swatch pick" />PICK</span>}
-        {hasOperationalPlan && <span><i className="legend-swatch pack" />PAK</span>}
+        <span className="legend-title">{hasSavedPlan ? "CZYNNOŚCI" : "DANE Z GRAFIKU"}</span>
+        {!hasSavedPlan && <span><i className="legend-swatch presence" />Obecność</span>}
+        {hasSavedPlan && <span><i className="legend-swatch pick" />PICK</span>}
+        {hasSavedPlan && <span><i className="legend-swatch pack" />PAK</span>}
         <span><i className="legend-swatch duty" />Dyżur</span>
-        {hasOperationalPlan && <span><i className="legend-swatch break" />Przerwa</span>}
-        {hasOperationalPlan && <span><i className="legend-swatch clean" />Porządki</span>}
-        {hasOperationalPlan && <span><i className="legend-swatch returns" />Zwroty</span>}
+        {hasSavedPlan && <span><i className="legend-swatch break" />Przerwa</span>}
+        {hasSavedPlan && <span><i className="legend-swatch clean" />Porządki</span>}
+        {hasSavedPlan && <span><i className="legend-swatch returns" />Zwroty</span>}
         <span className="legend-hint">
-          {hasOperationalPlan ? "Plan można skorygować ręcznie" : "Godziny i dyżury pochodzą z miesięcznego grafiku MOL"}
+          {hasSavedPlan ? "Plan można skorygować ręcznie" : "Godziny i dyżury pochodzą z miesięcznego grafiku MOL"}
         </span>
       </section>
 
@@ -107,7 +114,7 @@ export function WorkPlan({
         <div className="section-heading schedule-heading">
           <div>
             <p className="eyebrow">OBSADA I CZAS</p>
-            <h2 id="schedule-title">{hasOperationalPlan ? "Harmonogram dnia" : "Grafik wejściowy"}</h2>
+            <h2 id="schedule-title">{hasSavedPlan ? "Harmonogram dnia" : "Grafik wejściowy"}</h2>
           </div>
           <div className="schedule-tools">
             <span className="resolution-note">Siatka co 5 min · plan docelowo w blokach 15 min</span>
@@ -138,8 +145,7 @@ export function WorkPlan({
         </div>
       </section>
 
-      {hasOperationalPlan && performance.rows.length > 0 && (
-        <section className="operator-performance-card card" aria-labelledby="operator-performance-title">
+      <section className="operator-performance-card card" aria-labelledby="operator-performance-title">
           <div className="section-heading operator-performance-heading">
             <div>
               <p className="eyebrow">PLAN VS WYKONANIE</p>
@@ -153,8 +159,26 @@ export function WorkPlan({
               </span>
             </div>
           </div>
-          <div className="operator-performance-wrap">
-            <table>
+
+          {planRestoreLoading ? (
+            <div className="operator-performance-state">Wczytywanie zapisanego planu dla {formatLongDate(date)}…</div>
+          ) : planRestoreError ? (
+            <div className="operator-performance-state warning">
+              Nie udało się odtworzyć zapisanego planu. {planRestoreError}
+            </div>
+          ) : !hasSavedPlan ? (
+            <div className="operator-performance-state">
+              Brak zapisanego planu dla {formatLongDate(date)}. Tabela pojawi się automatycznie po wejściu na dzień, dla którego istnieje zapisany plan.
+            </div>
+          ) : performance.rows.length === 0 ? (
+            <div className="operator-performance-state warning">
+              Zapisany plan został odczytany, ale nie zawiera pracowników do pokazania w tabeli.
+            </div>
+          ) : (
+            <>
+              <div className="operator-performance-wrap">
+                <table>
+
               <thead>
                 <tr>
                   <th scope="col">Pracownik</th>
@@ -197,16 +221,18 @@ export function WorkPlan({
               </tfoot>
             </table>
           </div>
-          <div className="operator-performance-note">
-            <span>Plan do teraz: wyłącznie zakończone bloki × globalna norma procesu.</span>
-            <span>Wykonanie: dzienny licznik ES do czasu snapshotu; aktualizacja co 30 min.</span>
-            <span>PICK i PAK pozostają w swoich jednostkach — bez przeliczania między procesami.</span>
-            {performance.unmappedOperators > 0 && <span className="mapping-warning">Operatorzy ES bez mapowania: {performance.unmappedOperators}</span>}
-          </div>
+              <div className="operator-performance-note">
+                <span>Plan do teraz: wyłącznie zakończone bloki × globalna norma procesu.</span>
+                <span>Wykonanie: dzienny licznik ES do czasu snapshotu; aktualizacja co 30 min.</span>
+                <span>PICK i PAK pozostają w swoich jednostkach — bez przeliczania między procesami.</span>
+                {!hasOperationalBlocks && <span>Zapisany plan nie zawiera już bloków PICK/PAK — pokazujemy go mimo to, zamiast ukrywać sekcję.</span>}
+                {performance.unmappedOperators > 0 && <span className="mapping-warning">Operatorzy ES bez mapowania: {performance.unmappedOperators}</span>}
+              </div>
+            </>
+          )}
         </section>
-      )}
 
-      {!hasOperationalPlan ? (
+      {!hasSavedPlan ? (
         <section className="source-ready-card card" aria-label="Status danych wejściowych">
           <b>Grafik gotowy do planowania.</b> Aplikacja zna już godziny obecności, podział Przyjęcie / Wydanie i dyżury.
           Nie pokazujemy jeszcze zerowych norm PICK / PAK, ponieważ nie został uruchomiony algorytm przydziału pracy.
