@@ -1,14 +1,7 @@
-// @ts-nocheck -- Node's strip-types test runner needs explicit .ts imports.
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  createSettingsAccessToken,
-  defaultSettingsPinDigest,
-  isValidSettingsPin,
-  settingsPinDigest,
-  verifySettingsAccessToken,
-  verifySettingsPin,
-} from "./settings-auth.ts";
+// @ts-expect-error Node's strip-types test runner requires the explicit TypeScript extension.
+import { createSettingsAccessToken, defaultSettingsPinDigest, isValidSettingsPin, settingsPinDigest, verifySettingsAccessToken, verifySettingsPin } from "./settings-auth.ts";
 
 const secret = "test-only-session-secret-with-at-least-32-characters";
 
