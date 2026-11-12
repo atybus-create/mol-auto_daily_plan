@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ManualPlanDialog } from "@/components/manual-plan-dialog";
 import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
 import { DEFAULT_PLANNING_AUTOMATION_SETTINGS, normalizePlanningAutomationSettings } from "@/lib/planning-settings";
-import type { AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms, PlanningAutomationSettings } from "@/types/plan";
+import type { ActivityBlock, AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlanManualOverride, PlannerNorms, PlanningAutomationSettings } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
 type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
@@ -14,6 +15,7 @@ type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]
 
 const defaultNorms: PlannerNorms = { pick_per_hour: 210, pack_per_hour: 70, pick_seconds: 22, pack_seconds: 50 };
 const EXECUTION_REFRESH_MS = 30 * 60 * 1000;
+const PLAN_REFRESH_MS = 5 * 60 * 1000;
 const leaderKeys = new Set(["magda_w", "aso", "alina"]);
 const receivingKeys = new Set(["mateusz", "nikita", "murat"]);
 
@@ -46,6 +48,7 @@ export function PlanDashboard() {
   const [planRestoreError, setPlanRestoreError] = useState("");
   const [execution, setExecution] = useState<ExecutionSnapshotResponse | null>(null);
   const [executionLoading, setExecutionLoading] = useState(true);
+  const [editTarget, setEditTarget] = useState<{ employee: Employee; block: ActivityBlock } | null>(null);
   const latestPlanRequest = useRef(0);
 
   useEffect(() => {
@@ -170,11 +173,16 @@ export function PlanDashboard() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const requestId = ++latestPlanRequest.current;
+    let inFlight = false;
 
-    async function readLatestPlan() {
-      setPlanRestoreLoading(true);
-      setPlanRestoreError("");
+    async function readLatestPlan(initial: boolean) {
+      if (inFlight) return;
+      inFlight = true;
+      const requestId = ++latestPlanRequest.current;
+      if (initial) {
+        setPlanRestoreLoading(true);
+        setPlanRestoreError("");
+      }
       try {
         const response = await fetch(`/api/plan?date=${encodeURIComponent(date)}`, {
           cache: "no-store",
@@ -189,20 +197,25 @@ export function PlanDashboard() {
           setPlanRestoreError("");
         }
       } catch (err) {
-        if (!controller.signal.aborted && requestId === latestPlanRequest.current) {
+        if (!controller.signal.aborted && requestId === latestPlanRequest.current && initial) {
           const message = err instanceof Error ? err.message : "Nie udało się odczytać zapisanego planu.";
           setPlanRestoreError(message);
           setGeneratedPlan(null);
         }
       } finally {
-        if (!controller.signal.aborted && requestId === latestPlanRequest.current) {
+        inFlight = false;
+        if (!controller.signal.aborted && requestId === latestPlanRequest.current && initial) {
           setPlanRestoreLoading(false);
         }
       }
     }
 
-    void readLatestPlan();
-    return () => controller.abort();
+    void readLatestPlan(true);
+    const timer = window.setInterval(() => { void readLatestPlan(false); }, PLAN_REFRESH_MS);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+    };
   }, [date, reload]);
 
   const currentGeneratedPlan = generatedPlan?.business_date === date ? generatedPlan : null;
@@ -228,6 +241,10 @@ export function PlanDashboard() {
         start: block.start,
         end: block.end,
         kind: block.activity,
+        source: block.source,
+        reason: block.reason,
+        locked: block.locked,
+        override_id: block.override_id,
       })),
     }));
   }, [currentGeneratedPlan, employees, schedule]);
@@ -241,7 +258,7 @@ export function PlanDashboard() {
       const response = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, demand }),
+        body: JSON.stringify({ date, demand, trigger: "BUTTON", trigger_ref: "ui_button" }),
       });
       const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
       if (!response.ok || !result.ok) {
@@ -255,6 +272,53 @@ export function PlanDashboard() {
       setToast(detail);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Błąd generatora planu.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
+  function openManualCorrection(employeeId: string, blockIndex: number) {
+    if (!currentGeneratedPlan || planLoading) return;
+    const employee = plannedEmployees.find(item => item.id === employeeId);
+    const block = employee?.blocks[blockIndex];
+    if (!employee || !block) return;
+    if (block.kind === "duty") {
+      setToast("Dyżur pochodzi z grafiku i nie podlega ręcznej korekcie planu.");
+      return;
+    }
+    setEditTarget({ employee, block });
+  }
+
+  async function submitManualCorrection(override: PlanManualOverride, removeOverrideIds: string[] = []) {
+    if (planLoading || !demand || demand.status !== "ready") return;
+    latestPlanRequest.current += 1;
+    setPlanLoading(true);
+    setToast("");
+    try {
+      const response = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date,
+          demand,
+          trigger: "MANUAL",
+          trigger_ref: "ui_manual",
+          manual_overrides: removeOverrideIds.length ? [] : [override],
+          remove_override_ids: removeOverrideIds,
+        }),
+      });
+      const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
+      if (!response.ok || !result.ok) {
+        throw new Error(result.ok ? "Nie udało się zapisać korekty." : (result.message || result.error));
+      }
+      setGeneratedPlan(result);
+      setEditTarget(null);
+      setActiveTab("work");
+      setToast(removeOverrideIds.length
+        ? "Ręczna blokada zdjęta. Pozostała część planu została przeliczona."
+        : "Ręczna korekta zapisana. Pozostała część planu została przeliczona.");
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Błąd ręcznej korekty planu.");
     } finally {
       setPlanLoading(false);
     }
@@ -304,9 +368,9 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={false}
+          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={Boolean(currentGeneratedPlan) && !planLoading}
             onToggleCollapsed={() => setCollapsed(x => !x)}
-            onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
+            onBlockClick={(employeeId, blockIndex) => openManualCorrection(employeeId, blockIndex)}/>
         )}
         {activeTab === "orders" && <OrdersView demand={demand} loading={demandLoading} error={demandError} />}
         {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} planning={planningSettings} version={configVersion}
@@ -317,6 +381,29 @@ export function PlanDashboard() {
           <span>{scheduleVersion ? `Grafik v${scheduleVersion} · ${sourceSheet || ""}` : "Brak danych dla wybranego dnia"} · konfiguracja v{configVersion || "—"}</span>
         </footer>
       </main>
+      {editTarget && (
+        <ManualPlanDialog
+          employee={editTarget.employee}
+          block={editTarget.block}
+          profile={profiles.find(profile => profile.employee_key === editTarget.employee.id) ?? null}
+          saving={planLoading}
+          onClose={() => setEditTarget(null)}
+          onSave={override => { void submitManualCorrection(override); }}
+          onRemove={overrideId => {
+            const placeholder: PlanManualOverride = {
+              override_id: overrideId,
+              employee_key: editTarget.employee.id,
+              start: editTarget.block.start,
+              end: editTarget.block.end,
+              activity: editTarget.block.kind,
+              locked: true,
+              created_at: new Date().toISOString(),
+              reason: editTarget.block.reason || "Korekta lidera",
+            };
+            void submitManualCorrection(placeholder, [overrideId]);
+          }}
+        />
+      )}
       {toast && <div className="toast visible" role="status" aria-live="polite">{toast}</div>}
     </>
   );
