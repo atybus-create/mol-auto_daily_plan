@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { normalizePlanningAutomationSettings, validatePlanningAutomationSettings } from "@/lib/planning-settings";
 import type { AuxiliaryPolicy, EmployeeProfile, PlannerNorms, PlannerRole, PreferredProcess, PlanningAutomationSettings, PlanningAutomationSlotId } from "@/types/plan";
 
-type SettingsTab = "employees" | "norms" | "planning";
+type SettingsTab = "employees" | "norms" | "planning" | "access";
 type Props = {
   profiles: EmployeeProfile[];
   norms: PlannerNorms;
@@ -76,6 +76,8 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
   const [planningDraft, setPlanningDraft] = useState<PlanningAutomationSettings>(() => normalizePlanningAutomationSettings(planning));
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [pinDraft, setPinDraft] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
   const ordered = useMemo(() => [...profiles].sort((a,b) =>
     groups.indexOf(a.group_name as typeof groups[number]) - groups.indexOf(b.group_name as typeof groups[number])
     || a.display_name.localeCompare(b.display_name, "pl")
@@ -116,6 +118,31 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
     setSelectedKey(key);
     setDraft(cloneProfile(person));
     setNotice("");
+  }
+
+  async function savePin() {
+    if (saving) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      if (!/^\d{4,8}$/.test(pinDraft)) throw new Error("PIN musi mieć od 4 do 8 cyfr.");
+      if (pinDraft !== pinConfirm) throw new Error("Wpisane PIN-y nie są takie same.");
+      const response = await fetch("/api/settings-access", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinDraft, confirm_pin: pinConfirm, expected_version: version }),
+      });
+      const data = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) throw new Error(data.error || "Nie udało się zmienić PIN-u.");
+      setPinDraft("");
+      setPinConfirm("");
+      setNotice("PIN ustawień został zmieniony.");
+      onReload();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Błąd zmiany PIN-u.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function save(action: "saveEmployee" | "saveNorms" | "savePlanning") {
@@ -163,6 +190,7 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
         <button type="button" className={tab==="employees" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("employees");setNotice("");}}>Pracownicy <b>{profiles.length}</b></button>
         <button type="button" className={tab==="norms" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("norms");setNotice("");}}>Normy i czasy</button>
         <button type="button" className={tab==="planning" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("planning");setNotice("");}}>Reguły planowania</button>
+        <button type="button" className={tab==="access" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("access");setNotice("");}}>Dostęp</button>
       </div>
 
       {error && <div className="settings-alert error" role="alert">{error}</div>}
@@ -348,6 +376,64 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
                 <small>{roleLabel(person.planner_role)} · kolejność {person.allocation_rank} · {person.preferred_process === "pick" ? "PICK" : person.preferred_process === "pack" ? "PAK" : "bez preferencji"}{person.supervisor_guard ? " · NADZÓR" : ""}</small>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {tab === "access" && (
+        <section className="card settings-access-card">
+          <div className="settings-card-heading">
+            <div>
+              <p className="eyebrow">KONTROLA DOSTĘPU</p>
+              <h2>PIN do Ustawień</h2>
+            </div>
+            <span>4–8 cyfr</span>
+          </div>
+          <p className="settings-paragraph">
+            PIN jest wymagany przy każdym wejściu do zakładki Ustawienia. Po wyjściu z tej zakładki dostęp zostaje ponownie zablokowany.
+          </p>
+          <div className="settings-fields-pair settings-pin-change">
+            <div className="settings-field">
+              <label htmlFor="settings-new-pin">Nowy PIN</label>
+              <input
+                id="settings-new-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                pattern="[0-9]*"
+                minLength={4}
+                maxLength={8}
+                value={pinDraft}
+                onChange={e=>setPinDraft(e.target.value.replace(/\D/g,"").slice(0,8))}
+                placeholder="4–8 cyfr"
+              />
+            </div>
+            <div className="settings-field">
+              <label htmlFor="settings-confirm-pin">Powtórz PIN</label>
+              <input
+                id="settings-confirm-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                pattern="[0-9]*"
+                minLength={4}
+                maxLength={8}
+                value={pinConfirm}
+                onChange={e=>setPinConfirm(e.target.value.replace(/\D/g,"").slice(0,8))}
+                placeholder="Powtórz PIN"
+              />
+            </div>
+          </div>
+          <div className="settings-editor-footer">
+            <p>Po zmianie nowy PIN będzie wymagany przy następnym wejściu do Ustawień.</p>
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={()=>{void savePin();}}
+              disabled={saving || loading || !/^\d{4,8}$/.test(pinDraft) || pinDraft !== pinConfirm}
+            >
+              {saving ? "Zapisywanie…" : "Zmień PIN"}
+            </button>
           </div>
         </section>
       )}
