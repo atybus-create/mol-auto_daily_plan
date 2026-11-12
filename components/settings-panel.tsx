@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AuxiliaryPolicy, EmployeeProfile, PlannerNorms, PlannerRole, PreferredProcess } from "@/types/plan";
+import { normalizePlanningAutomationSettings, validatePlanningAutomationSettings } from "@/lib/planning-settings";
+import type { AuxiliaryPolicy, EmployeeProfile, PlannerNorms, PlannerRole, PreferredProcess, PlanningAutomationSettings, PlanningAutomationSlotId } from "@/types/plan";
 
 type SettingsTab = "employees" | "norms" | "planning";
 type Props = {
   profiles: EmployeeProfile[];
   norms: PlannerNorms;
+  planning: PlanningAutomationSettings;
   version: number;
   loading: boolean;
   error: string;
@@ -55,11 +57,23 @@ function roleLabel(role: PlannerRole) {
   return plannerRoles.find(item => item.value === role)?.label ?? role;
 }
 
-export function SettingsPanel({ profiles, norms, version, loading, error, onReload }: Props) {
+function updateSlot(
+  settings: PlanningAutomationSettings,
+  id: PlanningAutomationSlotId,
+  patch: Partial<PlanningAutomationSettings["slots"][number]>,
+) {
+  return {
+    ...settings,
+    slots: settings.slots.map(slot => slot.id === id ? { ...slot, ...patch, id: slot.id } : slot),
+  };
+}
+
+export function SettingsPanel({ profiles, norms, planning, version, loading, error, onReload }: Props) {
   const [tab, setTab] = useState<SettingsTab>("employees");
   const [selectedKey, setSelectedKey] = useState("");
   const [draft, setDraft] = useState<EmployeeProfile | null>(null);
   const [normDraft, setNormDraft] = useState<PlannerNorms>(norms);
+  const [planningDraft, setPlanningDraft] = useState<PlanningAutomationSettings>(() => normalizePlanningAutomationSettings(planning));
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const ordered = useMemo(() => [...profiles].sort((a,b) =>
@@ -86,6 +100,12 @@ export function SettingsPanel({ profiles, norms, version, loading, error, onRelo
   }, [profiles, selectedKey]);
 
   useEffect(() => { setNormDraft(norms); }, [norms]);
+  useEffect(() => { setPlanningDraft(normalizePlanningAutomationSettings(planning)); }, [planning]);
+
+  function updatePlanningSlot(id: PlanningAutomationSlotId, patch: Partial<PlanningAutomationSettings["slots"][number]>) {
+    setPlanningDraft(current => updateSlot(current, id, patch));
+    setNotice("");
+  }
 
   function selectPerson(key: string) {
     const person = profiles.find(p => p.employee_key === key);
@@ -95,14 +115,20 @@ export function SettingsPanel({ profiles, norms, version, loading, error, onRelo
     setNotice("");
   }
 
-  async function save(action: "saveEmployee" | "saveNorms") {
+  async function save(action: "saveEmployee" | "saveNorms" | "savePlanning") {
     if (saving) return;
     setSaving(true);
     setNotice("");
     try {
+      if (action === "savePlanning") {
+        const validationError = validatePlanningAutomationSettings(planningDraft);
+        if (validationError) throw new Error(validationError);
+      }
       const body = action === "saveEmployee"
         ? { action, profile: draft }
-        : { action, norms: normDraft, expected_version: version };
+        : action === "saveNorms"
+          ? { action, norms: normDraft, expected_version: version }
+          : { action, planning: planningDraft, expected_version: version };
       const response = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -255,7 +281,58 @@ export function SettingsPanel({ profiles, norms, version, loading, error, onRelo
 
       {tab === "planning" && (
         <section className="card settings-norms">
-          <div className="settings-card-heading"><div><p className="eyebrow">LOGIKA GENERATORA</p><h2>Reguły planowania</h2></div></div>
+          <div className="settings-card-heading"><div><p className="eyebrow">LOGIKA GENERATORA</p><h2>Reguły planowania</h2></div><span>Konfiguracja v{version || "—"}</span></div>
+
+          <div className="planning-automation">
+            <div className="planning-automation-header">
+              <div>
+                <h3>Automatyczne przeliczenia planu</h3>
+                <p>Ten harmonogram będzie używany przez scheduler n8n. Wszystkie przeliczenia korzystają z tego samego generatora co przycisk „Przelicz plan”.</p>
+              </div>
+              <label className="settings-check settings-active">
+                <input type="checkbox" checked={planningDraft.enabled} onChange={e=>setPlanningDraft({...planningDraft,enabled:e.target.checked})}/>
+                Automat aktywny
+              </label>
+            </div>
+
+            <div className="planning-slots">
+              {([
+                ["initial", "Start dnia", "Pierwszy plan po potwierdzeniu gotowości danych"],
+                ["replan_1", "Korekta 1", "Przeliczenie pozostałej części dnia"],
+                ["replan_2", "Korekta 2", "Przeliczenie pozostałej części dnia"],
+                ["replan_3", "Korekta 3", "Ostatnie planowe przeliczenie dnia"],
+              ] as const).map(([id, label, hint]) => {
+                const slot = planningDraft.slots.find(item => item.id === id)!;
+                return (
+                  <div className="planning-slot" key={id}>
+                    <label className="settings-check">
+                      <input type="checkbox" checked={slot.enabled} onChange={e=>updatePlanningSlot(id,{enabled:e.target.checked})}/>
+                      <span><b>{label}</b><small>{hint}</small></span>
+                    </label>
+                    <input aria-label={`Godzina: ${label}`} type="time" step="300" value={slot.time} onChange={e=>updatePlanningSlot(id,{time:e.target.value})} disabled={!slot.enabled}/>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="settings-fields-pair planning-readiness">
+              <div className="settings-field">
+                <label htmlFor="planning-retry">Ponowienie przy braku danych</label>
+                <span className="settings-number"><input id="planning-retry" type="number" min="1" max="30" step="1" value={planningDraft.readiness_retry_minutes} onChange={e=>setPlanningDraft({...planningDraft,readiness_retry_minutes:Number(e.target.value)})}/><b>min</b></span>
+                <small>Scheduler nie tworzy planu na niekompletnych danych — ponawia próbę.</small>
+              </div>
+              <div className="settings-field">
+                <label htmlFor="planning-timeout">Maks. oczekiwanie na komplet danych</label>
+                <span className="settings-number"><input id="planning-timeout" type="number" min="5" max="120" step="5" value={planningDraft.readiness_timeout_minutes} onChange={e=>setPlanningDraft({...planningDraft,readiness_timeout_minutes:Number(e.target.value)})}/><b>min</b></span>
+                <small>Po tym czasie automat zapisze błąd gotowości zamiast tworzyć błędny plan.</small>
+              </div>
+            </div>
+
+            <div className="settings-editor-footer">
+              <p>Domyślnie: 06:00 · 08:00 · 12:00 · 16:00. Godziny można zmieniać lub wyłączać pojedynczo.</p>
+              <button type="button" className="button button-primary" onClick={()=>save("savePlanning")} disabled={saving || loading}>{saving ? "Zapisywanie…" : "Zapisz harmonogram automatu"}</button>
+            </div>
+          </div>
           <p className="settings-paragraph"><b>Kolejność zasobów:</b> Wydanie podstawowe → Wsparcie Przyjęć → Rezerwa specjalistyczna → Lider / rezerwa → Ostatnia rezerwa.</p>
           <p className="settings-paragraph"><b>Przyjęcia:</b> planner uruchamia wsparcie pojedynczo według „Kolejności w roli” i stara się zostawić minimum jedną dostępną osobę na Przyjęciu.</p>
           <p className="settings-paragraph"><b>Nadzór:</b> przy włączonej ochronie generator nie przydzieli ostatniego dostępnego lidera do PICK/PAK.</p>
