@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { signConfigEnvelope, type SignedConfigEnvelope } from "@/lib/config-auth";
+import { isRecord, validOverrides, validPlanVersion, validRemoveIds } from "@/lib/plan-request-validation";
 import type { GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandSnapshot } from "@/types/plan";
 
 export const runtime = "nodejs";
@@ -17,27 +18,6 @@ function validDate(value: string) {
 }
 
 
-const ACTIVITIES = new Set(["pick", "pack", "presence", "clean", "returns", "break"]);
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-function isQuarterTime(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) return false;
-  const [hour, minute] = value.split(":").map(Number);
-  return hour >= 0 && hour <= 23 && minute >= 0 && minute < 60 && minute % 15 === 0;
-}
-function validOverrides(value: unknown): boolean {
-  return Array.isArray(value) && value.length <= 50 && value.every(item =>
-    isRecord(item) &&
-    typeof item.override_id === "string" && item.override_id.length > 0 && item.override_id.length <= 160 &&
-    typeof item.employee_key === "string" && item.employee_key.length > 0 && item.employee_key.length <= 160 &&
-    isQuarterTime(item.start) && isQuarterTime(item.end) && item.start < item.end &&
-    typeof item.activity === "string" && ACTIVITIES.has(item.activity) &&
-    item.locked === true &&
-    typeof item.created_at === "string" && !Number.isNaN(Date.parse(item.created_at)) &&
-    typeof item.reason === "string" && item.reason.length <= 240
-  );
-}
 function isPlanError(value: unknown): value is GeneratedPlanError {
   return isRecord(value) && value.ok === false &&
     typeof value.error === "string" &&
@@ -146,12 +126,9 @@ export async function POST(request: NextRequest) {
     const expectedPlanId = body.expected_plan_id;
     const expectedRevision = body.expected_revision;
     if (!validOverrides(manualOverrides) ||
-      !Array.isArray(removeOverrideIds) || removeOverrideIds.length > 50 ||
-      !removeOverrideIds.every(id => typeof id === "string" && id.length > 0 && id.length <= 160) ||
+      !validRemoveIds(removeOverrideIds) ||
       !hasExpectedId || !hasExpectedRevision ||
-      !(expectedPlanId === null || (typeof expectedPlanId === "string" && expectedPlanId.length > 0 && expectedPlanId.length <= 160)) ||
-      !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 0) ||
-      (expectedPlanId === null && expectedRevision !== 0) ||
+      !validPlanVersion(expectedPlanId, expectedRevision) ||
       (trigger === "MANUAL" && Array.isArray(manualOverrides) && manualOverrides.length === 0 && Array.isArray(removeOverrideIds) && removeOverrideIds.length === 0)
     ) {
       return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowe dane korekty lub brak aktualnej wersji planu. Odśwież plan." } satisfies GeneratedPlanError, 400);
