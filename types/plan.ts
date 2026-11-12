@@ -6,6 +6,10 @@ export type ActivityBlock = {
   start: string;
   end: string;
   kind: ActivityKind;
+  source?: "auto" | "manual";
+  reason?: string;
+  locked?: boolean;
+  override_id?: string | null;
 };
 
 export type Employee = {
