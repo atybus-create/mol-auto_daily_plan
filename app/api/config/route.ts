@@ -11,6 +11,7 @@ const PATHS: Record<MutableConfigAction, string> = {
   read: "mol-auto-plan-config-read",
   saveEmployee: "mol-auto-plan-config-employee",
   saveNorms: "mol-auto-plan-config-norms",
+  savePlanning: "mol-auto-plan-config-planning",
 };
 
 function authorized(request: NextRequest) {
@@ -49,12 +50,15 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
   if (origin && origin !== request.nextUrl.origin) return response({ ok: false, error: "Niedozwolone pochodzenie żądania." }, 403);
   try {
-    const body = await request.json() as { action?: unknown; profile?: unknown; norms?: unknown; expected_version?: unknown };
+    const body = await request.json() as { action?: unknown; profile?: unknown; norms?: unknown; planning?: unknown; expected_version?: unknown };
     if (body.action === "saveEmployee" && body.profile && typeof body.profile === "object" && !Array.isArray(body.profile)) {
       return await forward("saveEmployee", body.profile as Record<string, unknown>);
     }
     if (body.action === "saveNorms" && body.norms && typeof body.norms === "object" && !Array.isArray(body.norms)) {
       return await forward("saveNorms", { norms: body.norms as Record<string, unknown>, expected_version: body.expected_version });
+    }
+    if (body.action === "savePlanning" && body.planning && typeof body.planning === "object" && !Array.isArray(body.planning)) {
+      return await forward("savePlanning", { planning: body.planning as Record<string, unknown>, expected_version: body.expected_version });
     }
     return response({ ok: false, error: "Nieprawidłowa operacja." }, 400);
   } catch {
