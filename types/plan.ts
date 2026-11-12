@@ -173,6 +173,34 @@ export type PlannerNorms = {
   pack_seconds: number;
 };
 
+export type PlanningAutomationSlotId = "initial" | "replan_1" | "replan_2" | "replan_3";
+
+export type PlanningAutomationSlot = {
+  id: PlanningAutomationSlotId;
+  time: string;
+  enabled: boolean;
+};
+
+export type PlanningAutomationSettings = {
+  enabled: boolean;
+  slots: PlanningAutomationSlot[];
+  readiness_retry_minutes: number;
+  readiness_timeout_minutes: number;
+};
+
+export type PlanTrigger = "BUTTON" | "AUTO" | "MANUAL";
+
+export type PlanManualOverride = {
+  override_id: string;
+  employee_key: string;
+  start: string;
+  end: string;
+  activity: ActivityKind;
+  locked: true;
+  created_at: string;
+  reason: string;
+};
+
 
 export type GeneratedPlanBlock = {
   start: string;
@@ -180,6 +208,8 @@ export type GeneratedPlanBlock = {
   activity: ActivityKind;
   source: "auto" | "manual";
   reason: string;
+  locked?: boolean;
+  override_id?: string | null;
 };
 
 export type GeneratedPlanEmployee = {
@@ -231,9 +261,12 @@ export type GeneratedPlanResponse = {
   employees: GeneratedPlanEmployee[];
   revision?: {
     version: number;
-    is_frozen: boolean;
-    frozen_at: string | null;
+    trigger: PlanTrigger;
+    parent_plan_id: string | null;
+    created_at: string;
+    manual_override_count: number;
   };
+  manual_overrides?: PlanManualOverride[];
 };
 
 export type GeneratedPlanError = {
