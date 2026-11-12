@@ -257,13 +257,28 @@ export type ExecutionOperator = {
   pack_completed: number;
 };
 
+export type EmployeeExecution = ExecutionOperator & {
+  employee_key: string | null;
+  operator_key: string;
+  display_name: string;
+  collected_at: string;
+  data_status: string;
+  mapped: boolean;
+};
+
 export type ExecutionSnapshotLatest = {
   snapshot_id: string | null;
   pick_completed: number;
   pack_completed: number;
   operators_count: number;
   operators: ExecutionOperator[];
+  employee_execution?: EmployeeExecution[];
+  unmapped_operators?: EmployeeExecution[];
+  unmapped_count?: number;
   collected_at: string | null;
+  next_refresh_at?: string | null;
+  refresh_interval_minutes?: number;
+  recommended_client_refresh_minutes?: number;
   age_minutes: number;
   data_status: string;
   error_message: string;
@@ -276,6 +291,11 @@ export type ExecutionSnapshotResponse = {
   complete: boolean;
   generated_at: string;
   latest: ExecutionSnapshotLatest | null;
+  refresh?: {
+    source_interval_minutes: number;
+    recommended_client_minutes: number;
+    next_refresh_at: string | null;
+  };
   warnings: string[];
 };
 

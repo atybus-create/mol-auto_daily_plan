@@ -451,13 +451,16 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .operator-performance-heading { align-items: center; }
 .operator-performance-source { display: inline-flex; align-items: center; gap: 7px; color: #858896; font-size: 10px; white-space: nowrap; }
 .operator-performance-wrap { overflow-x: auto; }
-.operator-performance-wrap table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 11px; }
+.operator-performance-wrap table { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 11px; }
 .operator-performance-wrap th,
 .operator-performance-wrap td { padding: 11px 15px; border-top: 1px solid var(--line); text-align: right; vertical-align: middle; }
 .operator-performance-wrap th { background: #fafafd; color: #848795; font-size: 9px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
 .operator-performance-wrap th:first-child,
 .operator-performance-wrap td:first-child { text-align: left; }
 .operator-performance-wrap tbody tr:hover { background: #fcfcfe; }
+.operator-performance-wrap tbody tr:nth-child(even) td { border-top-style: dashed; }
+.operator-performance-wrap tfoot td { background: #f7f8fa; border-top: 1px solid #dfe1e7; font-weight: 700; }
+.operator-performance-wrap td[rowspan] { border-right: 1px solid var(--line); vertical-align: top; }
 .operator-person { display: grid; gap: 2px; }
 .operator-person strong { color: var(--ink); font-size: 12px; }
 .operator-person small { color: #90939f; font-size: 9px; }
@@ -472,6 +475,9 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .realization-badge.behind { background: #fff0f2; color: #a23f50; }
 .realization-badge.unavailable { background: #f1f2f5; color: #9295a1; }
 .operator-performance-note { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 15px; border-top: 1px solid var(--line); background: #fafafd; color: #858896; font-size: 9px; line-height: 1.45; }
+.operator-performance-source .refresh-dot.warning { background: #c18a24; }
+.operator-performance-source .refresh-dot.error { background: #b54859; }
+.operator-performance-source .refresh-dot.unavailable { background: #9b9da7; }
 @media (max-width: 700px) {
   .operator-performance-heading { align-items: flex-start; flex-direction: column; }
   .operator-performance-source { white-space: normal; }

@@ -12,6 +12,7 @@ type ScheduleResponse = { ok: boolean; error?: string; date: string; version: nu
 type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]; norms: PlannerNorms; version: number };
 
 const defaultNorms: PlannerNorms = { pick_per_hour: 210, pack_per_hour: 70, pick_seconds: 22, pack_seconds: 50 };
+const EXECUTION_REFRESH_MS = 30 * 60 * 1000;
 const leaderKeys = new Set(["magda_w", "aso", "alina"]);
 const receivingKeys = new Set(["mateusz", "nikita", "murat"]);
 
@@ -122,21 +123,30 @@ export function PlanDashboard() {
 
   useEffect(() => {
     const controller = new AbortController();
-    async function readExecution() {
-      setExecutionLoading(true);
+    let inFlight = false;
+
+    async function readExecution(initial: boolean) {
+      if (inFlight) return;
+      inFlight = true;
+      if (initial) setExecutionLoading(true);
       try {
         const response = await fetch(`/api/execution?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal });
         const result = await response.json() as ExecutionSnapshotResponse | ExecutionSnapshotError;
         if (!response.ok || !result.ok) throw new Error(result.ok ? "Nie udało się pobrać wykonania ES." : (result.message || result.error));
         setExecution(result);
       } catch {
-        if (!controller.signal.aborted) setExecution(null);
+        if (!controller.signal.aborted && initial) setExecution(null);
       } finally {
-        if (!controller.signal.aborted) setExecutionLoading(false);
+        inFlight = false;
+        if (!controller.signal.aborted && initial) setExecutionLoading(false);
       }
     }
-    readExecution();
-    return () => controller.abort();
+    void readExecution(true);
+    const timer = window.setInterval(() => { void readExecution(false); }, EXECUTION_REFRESH_MS);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+    };
   }, [date, reload]);
 
   const employees = useMemo<Employee[]>(() => {
