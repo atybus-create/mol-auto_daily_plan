@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { signConfigEnvelope, type SignedConfigEnvelope } from "@/lib/config-auth";
+import { normalizeManualOverrideInput } from "@/lib/manual-overrides";
 import type { GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandSnapshot } from "@/types/plan";
 
 export const runtime = "nodejs";
@@ -94,9 +95,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json() as { date?: unknown; demand?: unknown };
+    const body = await request.json() as { date?: unknown; demand?: unknown; trigger?: unknown; manual_overrides?: unknown };
     const date = typeof body.date === "string" ? body.date : "";
     const demand = body.demand as OrdersDemandSnapshot | undefined;
+    const trigger = body.trigger === "MANUAL" ? "MANUAL" : "BUTTON";
+    let manualOverrides = [];
+    if (trigger === "MANUAL") {
+      if (!Array.isArray(body.manual_overrides) || body.manual_overrides.length < 1 || body.manual_overrides.length > 20) {
+        return respond({ ok: false, error: "invalid_input", message: "Korekta ręczna wymaga od 1 do 20 bloków." } satisfies GeneratedPlanError, 400);
+      }
+      try {
+        manualOverrides = body.manual_overrides.map(normalizeManualOverrideInput);
+      } catch (error) {
+        return respond({ ok: false, error: "invalid_input", message: error instanceof Error ? error.message : "Nieprawidłowa korekta ręczna." } satisfies GeneratedPlanError, 400);
+      }
+    }
 
     if (!validDate(date) || !demand || demand.ok !== true || demand.business_date !== date || demand.status !== "ready") {
       const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Plan można wygenerować tylko dla kompletnego DAY DEMAND." };
@@ -116,6 +129,9 @@ export async function POST(request: NextRequest) {
           required_today: demand.required_today,
           generated_at: demand.generated_at,
         },
+        trigger,
+        trigger_ref: trigger === "MANUAL" ? `manual_ui_${Date.now()}` : "button",
+        manual_overrides: manualOverrides,
       },
     };
 
