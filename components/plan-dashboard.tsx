@@ -40,6 +40,8 @@ export function PlanDashboard() {
   const [demandError, setDemandError] = useState("");
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlanResponse | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [planRestoreLoading, setPlanRestoreLoading] = useState(true);
+  const [planRestoreError, setPlanRestoreError] = useState("");
   const [execution, setExecution] = useState<ExecutionSnapshotResponse | null>(null);
   const [executionLoading, setExecutionLoading] = useState(true);
   const latestPlanRequest = useRef(0);
@@ -168,6 +170,8 @@ export function PlanDashboard() {
     const requestId = ++latestPlanRequest.current;
 
     async function readLatestPlan() {
+      setPlanRestoreLoading(true);
+      setPlanRestoreError("");
       try {
         const response = await fetch(`/api/plan?date=${encodeURIComponent(date)}`, {
           cache: "no-store",
@@ -177,15 +181,24 @@ export function PlanDashboard() {
         if (!response.ok || !result.ok) {
           throw new Error(result.ok ? "Nie udało się odczytać zapisanego planu." : (result.message || result.error));
         }
-        if (requestId === latestPlanRequest.current) setGeneratedPlan(result.plan);
+        if (requestId === latestPlanRequest.current) {
+          setGeneratedPlan(result.plan);
+          setPlanRestoreError("");
+        }
       } catch (err) {
         if (!controller.signal.aborted && requestId === latestPlanRequest.current) {
-          setToast(err instanceof Error ? err.message : "Nie udało się odczytać zapisanego planu.");
+          const message = err instanceof Error ? err.message : "Nie udało się odczytać zapisanego planu.";
+          setPlanRestoreError(message);
+          setGeneratedPlan(null);
+        }
+      } finally {
+        if (!controller.signal.aborted && requestId === latestPlanRequest.current) {
+          setPlanRestoreLoading(false);
         }
       }
     }
 
-    readLatestPlan();
+    void readLatestPlan();
     return () => controller.abort();
   }, [date, reload]);
 
@@ -288,7 +301,7 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} collapsed={collapsed} editingEnabled={false}
+          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={false}
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
