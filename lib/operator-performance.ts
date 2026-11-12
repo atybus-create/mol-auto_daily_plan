@@ -60,11 +60,11 @@ export function buildOperatorPerformance(
   );
   const hasEmployeeContract = execution?.latest?.employee_execution !== undefined;
   const mappedLogins = new Set<string>();
-  const operationalEmployees = employees.filter(employee =>
-    employee.blocks.some(block => block.kind === "pick" || block.kind === "pack"),
-  );
 
-  const rows = operationalEmployees.map(employee => {
+  // A saved plan remains a plan even when its latest revision has no remaining PICK/PAK
+  // blocks (for example after the day's workload has already been completed). Keep every
+  // employee from the restored plan so the plan-vs-execution table can still be rendered.
+  const rows = employees.map(employee => {
     const profile = profileMap.get(employee.id);
     const login = normalizeEsLogin(profile?.es_login);
     let mapping: OperatorMapping;
