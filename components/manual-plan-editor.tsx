@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ActivityKind } from "@/types/plan";
 
 type Props = {
@@ -27,13 +27,6 @@ export function ManualPlanEditor({ employeeName, blockStart, blockEnd, activity,
   const [end, setEnd] = useState(blockEnd);
   const [kind, setKind] = useState<ActivityKind>(activity === "duty" ? "presence" : activity);
   const [reason, setReason] = useState("Korekta lidera");
-
-  useEffect(() => {
-    setStart(blockStart);
-    setEnd(blockEnd);
-    setKind(activity === "duty" ? "presence" : activity);
-    setReason("Korekta lidera");
-  }, [employeeName, blockStart, blockEnd, activity]);
 
   return (
     <div className="manual-editor-backdrop" role="presentation" onMouseDown={(event) => {
