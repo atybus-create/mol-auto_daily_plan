@@ -280,7 +280,7 @@ export function WorkPlan({
                   <tfoot><tr><td>Status planu</td><td colSpan={3}>{planStatus === "CAPACITY_SHORTAGE" ? "Brak wymaganej capacity" : "Workload pokryty w planie roboczym"}</td></tr></tfoot>
                 </table>
               </div>
-              <div className="orders-table-note"><span>Wykonanie pochodzi z najnowszego poprawnego snapshotu EasyStorage.</span><span>Rozbicie per operator zostanie dodane po pełnym mapowaniu loginów ES.</span></div>
+              <div className="orders-table-note"><span>Wykonanie pochodzi z najnowszego poprawnego snapshotu EasyStorage.</span><span>Rozbicie per operator znajduje się w tabeli Plan vs wykonanie powyżej.</span></div>
             </section>
           </div>
         </>
