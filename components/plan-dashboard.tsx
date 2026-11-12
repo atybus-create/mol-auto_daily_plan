@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ManualPlanEditor } from "@/components/manual-plan-editor";
 import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
 import { DEFAULT_PLANNING_AUTOMATION_SETTINGS, normalizePlanningAutomationSettings } from "@/lib/planning-settings";
-import type { AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms, PlanningAutomationSettings } from "@/types/plan";
+import type { ActivityKind, AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms, PlanningAutomationSettings } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
 type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
@@ -46,6 +47,14 @@ export function PlanDashboard() {
   const [planRestoreError, setPlanRestoreError] = useState("");
   const [execution, setExecution] = useState<ExecutionSnapshotResponse | null>(null);
   const [executionLoading, setExecutionLoading] = useState(true);
+  const [manualEdit, setManualEdit] = useState<{
+    employeeKey: string;
+    employeeName: string;
+    start: string;
+    end: string;
+    activity: ActivityKind;
+    overrideId: string | null;
+  } | null>(null);
   const latestPlanRequest = useRef(0);
 
   useEffect(() => {
@@ -228,9 +237,96 @@ export function PlanDashboard() {
         start: block.start,
         end: block.end,
         kind: block.activity,
+        source: block.source,
+        reason: block.reason,
+        locked: block.locked,
+        override_id: block.override_id,
       })),
     }));
   }, [currentGeneratedPlan, employees, schedule]);
+
+  function openManualEdit(employeeId: string, blockIndex: number) {
+    if (!currentGeneratedPlan || !demand || demand.status !== "ready" || planLoading) {
+      setToast("Korekta ręczna wymaga zapisanego planu i kompletnych danych dnia.");
+      return;
+    }
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+    if (date < today) {
+      setToast("Nie można korygować zakończonego dnia.");
+      return;
+    }
+    const person = currentGeneratedPlan.employees.find(item => item.employee_key === employeeId);
+    const block = person?.blocks[blockIndex];
+    if (!person || !block) return;
+    if (block.activity === "duty") {
+      setToast("Dyżur pochodzi z grafiku i nie jest nadpisywany korektą planu.");
+      return;
+    }
+
+    let start = block.start;
+    if (date === today) {
+      const current = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Warsaw", hour: "2-digit", minute: "2-digit", hour12: false });
+      const [hours, minutes] = current.split(":").map(Number);
+      const rounded = Math.ceil((hours * 60 + minutes) / 15) * 15;
+      const blockStart = toDashboardMinutes(block.start);
+      const blockEnd = toDashboardMinutes(block.end);
+      if (blockEnd <= rounded) {
+        setToast("Ten blok już się zakończył. Korygujemy tylko pozostałą część dnia.");
+        return;
+      }
+      if (rounded > blockStart) start = dashboardTime(rounded);
+    }
+
+    setManualEdit({
+      employeeKey: employeeId,
+      employeeName: person.display_name,
+      start,
+      end: block.end,
+      activity: block.activity,
+      overrideId: block.override_id ?? null,
+    });
+  }
+
+  async function saveManualEdit(value: { start: string; end: string; activity: ActivityKind; reason: string }) {
+    if (!manualEdit || planLoading || !demand || demand.status !== "ready") return;
+    setPlanLoading(true);
+    setToast("");
+    latestPlanRequest.current += 1;
+    try {
+      const overrideId = manualEdit.overrideId
+        ?? `manual_${manualEdit.employeeKey}_${value.start.replace(":", "")}_${value.end.replace(":", "")}`;
+      const response = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date,
+          demand,
+          trigger: "MANUAL",
+          manual_overrides: [{
+            override_id: overrideId,
+            employee_key: manualEdit.employeeKey,
+            start: value.start,
+            end: value.end,
+            activity: value.activity,
+            locked: true,
+            reason: value.reason,
+          }],
+        }),
+      });
+      const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
+      if (!response.ok || !result.ok) {
+        throw new Error(result.ok ? "Nie udało się przeliczyć korekty." : (result.message || result.error));
+      }
+      setGeneratedPlan(result);
+      setManualEdit(null);
+      const version = result.revision?.version ? ` v${result.revision.version}` : "";
+      setToast(`Korekta zapisana. Plan${version} został przeliczony.`);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Nie udało się zapisać korekty.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
 
   async function generatePlan() {
     if (planLoading || !demand || demand.status !== "ready") return;
@@ -304,9 +400,9 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={false}
+          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={Boolean(currentGeneratedPlan) && Boolean(demand) && demand?.status === "ready" && !planLoading}
             onToggleCollapsed={() => setCollapsed(x => !x)}
-            onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
+            onBlockClick={(employeeId, blockIndex) => openManualEdit(employeeId, blockIndex)}/>
         )}
         {activeTab === "orders" && <OrdersView demand={demand} loading={demandLoading} error={demandError} />}
         {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} planning={planningSettings} version={configVersion}
@@ -317,7 +413,30 @@ export function PlanDashboard() {
           <span>{scheduleVersion ? `Grafik v${scheduleVersion} · ${sourceSheet || ""}` : "Brak danych dla wybranego dnia"} · konfiguracja v{configVersion || "—"}</span>
         </footer>
       </main>
+      {manualEdit && (
+        <ManualPlanEditor
+          employeeName={manualEdit.employeeName}
+          blockStart={manualEdit.start}
+          blockEnd={manualEdit.end}
+          activity={manualEdit.activity}
+          saving={planLoading}
+          onCancel={() => { if (!planLoading) setManualEdit(null); }}
+          onSave={saveManualEdit}
+        />
+      )}
       {toast && <div className="toast visible" role="status" aria-live="polite">{toast}</div>}
     </>
   );
+}
+
+
+function toDashboardMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function dashboardTime(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
