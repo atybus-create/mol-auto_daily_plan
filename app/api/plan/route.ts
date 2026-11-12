@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       !(expectedPlanId === null || (typeof expectedPlanId === "string" && expectedPlanId.length > 0 && expectedPlanId.length <= 160)) ||
       !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 0) ||
       (expectedPlanId === null && expectedRevision !== 0) ||
-      (trigger === "MANUAL" && manualOverrides.length === 0 && removeOverrideIds.length === 0)
+      (trigger === "MANUAL" && Array.isArray(manualOverrides) && manualOverrides.length === 0 && Array.isArray(removeOverrideIds) && removeOverrideIds.length === 0)
     ) {
       return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowe dane korekty lub brak aktualnej wersji planu. Odśwież plan." } satisfies GeneratedPlanError, 400);
     }
