@@ -16,6 +16,37 @@ function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 
+
+const ACTIVITIES = new Set(["pick", "pack", "presence", "clean", "returns", "break"]);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function isQuarterTime(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\\d{2}:\\d{2}$/.test(value)) return false;
+  const [hour, minute] = value.split(":").map(Number);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute < 60 && minute % 15 === 0;
+}
+function validOverrides(value: unknown): boolean {
+  return Array.isArray(value) && value.length <= 50 && value.every(item =>
+    isRecord(item) &&
+    typeof item.override_id === "string" && item.override_id.length > 0 && item.override_id.length <= 160 &&
+    typeof item.employee_key === "string" && item.employee_key.length > 0 && item.employee_key.length <= 160 &&
+    isQuarterTime(item.start) && isQuarterTime(item.end) && item.start < item.end &&
+    typeof item.activity === "string" && ACTIVITIES.has(item.activity) &&
+    item.locked === true &&
+    typeof item.created_at === "string" && !Number.isNaN(Date.parse(item.created_at)) &&
+    typeof item.reason === "string" && item.reason.length <= 240
+  );
+}
+function isPlanError(value: unknown): value is GeneratedPlanError {
+  return isRecord(value) && value.ok === false &&
+    typeof value.error === "string" &&
+    (value.message === undefined || typeof value.message === "string");
+}
+function invalidResponse(message: string) {
+  return respond({ ok: false, error: "invalid_backend_response", message } satisfies GeneratedPlanError, 502);
+}
+
 function isGeneratedPlan(value: unknown, date: string): value is GeneratedPlanResponse {
   if (!value || typeof value !== "object") return false;
   const plan = value as Partial<GeneratedPlanResponse>;
@@ -101,15 +132,30 @@ export async function POST(request: NextRequest) {
       trigger_ref?: unknown;
       manual_overrides?: unknown;
       remove_override_ids?: unknown;
+      expected_plan_id?: unknown;
+      expected_revision?: unknown;
     };
     const date = typeof body.date === "string" ? body.date : "";
     const demand = body.demand as OrdersDemandSnapshot | undefined;
     const trigger = body.trigger === "MANUAL" ? "MANUAL" : "BUTTON";
     const triggerRef = typeof body.trigger_ref === "string" ? body.trigger_ref.slice(0, 120) : "";
-    const manualOverrides = Array.isArray(body.manual_overrides) ? body.manual_overrides : [];
-    const removeOverrideIds = Array.isArray(body.remove_override_ids)
-      ? body.remove_override_ids.filter((value): value is string => typeof value === "string" && value.length > 0).slice(0, 100)
-      : [];
+    const manualOverrides = body.manual_overrides ?? [];
+    const removeOverrideIds = body.remove_override_ids ?? [];
+    const hasExpectedId = Object.prototype.hasOwnProperty.call(body, "expected_plan_id");
+    const hasExpectedRevision = Object.prototype.hasOwnProperty.call(body, "expected_revision");
+    const expectedPlanId = body.expected_plan_id;
+    const expectedRevision = body.expected_revision;
+    if (!validOverrides(manualOverrides) ||
+      !Array.isArray(removeOverrideIds) || removeOverrideIds.length > 50 ||
+      !removeOverrideIds.every(id => typeof id === "string" && id.length > 0 && id.length <= 160) ||
+      !hasExpectedId || !hasExpectedRevision ||
+      !(expectedPlanId === null || (typeof expectedPlanId === "string" && expectedPlanId.length > 0 && expectedPlanId.length <= 160)) ||
+      !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 0) ||
+      (expectedPlanId === null && expectedRevision !== 0) ||
+      (trigger === "MANUAL" && manualOverrides.length === 0 && removeOverrideIds.length === 0)
+    ) {
+      return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowe dane korekty lub brak aktualnej wersji planu. Odśwież plan." } satisfies GeneratedPlanError, 400);
+    }
 
     if (!validDate(date) || !demand || demand.ok !== true || demand.business_date !== date || demand.status !== "ready") {
       const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Plan można wygenerować tylko dla kompletnego DAY DEMAND." };
@@ -133,6 +179,8 @@ export async function POST(request: NextRequest) {
         trigger_ref: triggerRef,
         manual_overrides: manualOverrides,
         remove_override_ids: removeOverrideIds,
+        expected_plan_id: expectedPlanId,
+        expected_revision: expectedRevision,
       },
     };
 
@@ -145,14 +193,22 @@ export async function POST(request: NextRequest) {
     });
 
     const text = await result.text();
-    let data: GeneratedPlanResponse | GeneratedPlanError;
+    let data: unknown;
     try {
-      data = JSON.parse(text) as GeneratedPlanResponse | GeneratedPlanError;
+      data = JSON.parse(text);
     } catch {
-      return respond({ ok: false, error: "invalid_backend_response", message: "Generator zwrócił nieprawidłową odpowiedź." } satisfies GeneratedPlanError, 502);
+      return invalidResponse("Generator zwrócił nieprawidłową odpowiedź.");
     }
-
-    return respond(data, result.ok && data.ok ? 200 : (result.ok ? 502 : result.status));
+    if (!result.ok) {
+      if (result.status >= 400 && result.status < 500 && isPlanError(data)) {
+        return respond(data, result.status);
+      }
+      return invalidResponse("Generator nie zwrócił poprawnego komunikatu błędu.");
+    }
+    if (!isGeneratedPlan(data, date)) {
+      return invalidResponse("Generator zwrócił niekompletny plan.");
+    }
+    return respond(data);
   } catch {
     return respond({ ok: false, error: "planner_unavailable", message: "Generator planu jest chwilowo niedostępny." } satisfies GeneratedPlanError, 502);
   }
