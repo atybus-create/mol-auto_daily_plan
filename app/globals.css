@@ -132,6 +132,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .activity-block.break { background: #f0f1f4; border-color: #e6e7eb; color: #777b88; }
 .activity-block.clean { background: var(--clean); border-color: #ded2ed; color: #70528f; }
 .activity-block.returns { background: var(--returns); border-color: #cde5e8; color: #347982; }
+.activity-block.manual { box-shadow: inset 0 0 0 2px rgba(27, 33, 64, .24); }
+.activity-block.manual::after { position: absolute; top: 2px; right: 4px; content: "●"; color: #1b2140; font-size: 6px; }
+.activity-block.locked { border-style: solid; }
 .activity-block[aria-pressed="true"] { outline: 2px solid var(--navy-soft); outline-offset: 1px; }
 .grid-rail { display: grid; grid-template-columns: var(--name-col) repeat(156, minmax(7px, 1fr)); min-height: 34px; background: #fafafd; border-top: 1px solid var(--line); }
 .rail-label { display: flex; align-items: center; padding: 0 11px; color: #898c99; font-size: 10px; font-weight: 700; text-transform: uppercase; }
@@ -266,6 +269,22 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .dialog-actions { display: flex; justify-content: end; gap: 8px; margin-top: 20px; }
 .toast { position: fixed; right: 20px; bottom: 20px; z-index: 10; max-width: calc(100% - 40px); padding: 11px 15px; transform: translateY(20px); opacity: 0; pointer-events: none; border-radius: 5px; background: var(--navy); color: white; box-shadow: var(--shadow); font-size: 12px; transition: opacity .18s ease, transform .18s ease; }
 .toast.visible { transform: translateY(0); opacity: 1; }
+
+.manual-editor-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 20px; background: rgba(23, 27, 49, .38); backdrop-filter: blur(2px); }
+.manual-editor { width: min(620px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid #d9dbe3; border-radius: 9px; background: white; box-shadow: 0 24px 70px rgba(25, 28, 48, .22); }
+.manual-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.manual-editor-heading h2 { margin: 2px 0 0; font-size: 19px; }
+.manual-editor-body { display: grid; gap: 18px; padding: 18px 20px; }
+.manual-editor-time { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.manual-editor-time label, .manual-editor-reason { display: grid; gap: 6px; color: var(--ink-soft); font-size: 10px; font-weight: 700; }
+.manual-editor-time input, .manual-editor-reason input { min-height: 39px; padding: 8px 10px; border: 1px solid #cfd2da; border-radius: 5px; background: white; color: var(--ink); font: inherit; }
+.manual-editor fieldset { margin: 0; padding: 0; border: 0; }
+.manual-editor legend { margin-bottom: 8px; color: var(--ink-soft); font-size: 10px; font-weight: 700; }
+.manual-editor-activities { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.manual-editor-activities label { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 8px 10px; border: 1px solid #dedfe5; border-radius: 5px; background: #fafafd; color: var(--ink); font-size: 11px; font-weight: 650; cursor: pointer; }
+.manual-editor-activities label.selected { border-color: #858ba7; background: #f0f2f8; box-shadow: inset 0 0 0 1px #858ba7; }
+.manual-editor-note { margin: 0; padding: 10px 12px; border-radius: 5px; background: #f7f8fa; color: #747887; font-size: 10px; line-height: 1.55; }
+.manual-editor-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--line); }
 
 @media (max-width: 900px) {
   .site-header { flex-wrap: wrap; padding: 12px 20px; gap: 14px; }
@@ -502,4 +521,12 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 @media (max-width: 700px) {
   .operator-performance-heading { align-items: flex-start; flex-direction: column; }
   .operator-performance-source { white-space: normal; }
+}
+
+@media (max-width: 640px) {
+  .manual-editor-backdrop { padding: 10px; }
+  .manual-editor { max-height: calc(100vh - 20px); }
+  .manual-editor-time { grid-template-columns: 1fr; }
+  .manual-editor-activities { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .manual-editor-footer { align-items: stretch; flex-direction: column-reverse; }
 }
