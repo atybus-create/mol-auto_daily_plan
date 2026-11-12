@@ -5,11 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
 import { WorkPlan } from "@/components/work-plan";
-import type { AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms } from "@/types/plan";
+import { DEFAULT_PLANNING_AUTOMATION_SETTINGS, normalizePlanningAutomationSettings } from "@/lib/planning-settings";
+import type { AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlannerNorms, PlanningAutomationSettings } from "@/types/plan";
 
 type ScheduleEntry = { id: string; name: string; area: string; start: string | null; end: string | null; duty: boolean; absence: string | null };
 type ScheduleResponse = { ok: boolean; error?: string; date: string; version: number | null; source_sheet: string | null; employees: ScheduleEntry[] };
-type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]; norms: PlannerNorms; version: number };
+type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]; norms: PlannerNorms; planning?: PlanningAutomationSettings; version: number };
 
 const defaultNorms: PlannerNorms = { pick_per_hour: 210, pack_per_hour: 70, pick_seconds: 22, pack_seconds: 50 };
 const EXECUTION_REFRESH_MS = 30 * 60 * 1000;
@@ -29,6 +30,7 @@ export function PlanDashboard() {
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const [profiles, setProfiles] = useState<EmployeeProfile[]>([]);
   const [norms, setNorms] = useState<PlannerNorms>(defaultNorms);
+  const [planningSettings, setPlanningSettings] = useState<PlanningAutomationSettings>(DEFAULT_PLANNING_AUTOMATION_SETTINGS);
   const [configVersion, setConfigVersion] = useState(0);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState("");
@@ -56,6 +58,7 @@ export function PlanDashboard() {
         if (!res.ok || !data.ok || !Array.isArray(data.profiles)) throw new Error(data.error || "Nie udało się pobrać ustawień.");
         setProfiles(data.profiles);
         setNorms(data.norms);
+        setPlanningSettings(normalizePlanningAutomationSettings(data.planning));
         setConfigVersion(data.version);
         setConfigError("");
       } catch (err) {
@@ -306,8 +309,8 @@ export function PlanDashboard() {
             onBlockClick={() => setToast("Edycja planu będzie możliwa po podłączeniu algorytmu.")}/>
         )}
         {activeTab === "orders" && <OrdersView demand={demand} loading={demandLoading} error={demandError} />}
-        {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} version={configVersion}
-          loading={configLoading} error={configError} onReload={refresh}/>}
+        {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} planning={planningSettings} version={configVersion}
+          loading={configLoading} error={configError} onReload={refresh}/>} 
 
         <footer className="page-footer">
           <span>ESTYL.PL <b>·</b> MOL Plan Dnia</span>
