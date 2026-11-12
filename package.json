@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "prebuild": "node --experimental-strip-types --test lib/plan-request-validation.test.ts"
+    "prebuild": "node --experimental-strip-types --test lib/*.test.ts"
   },
   "dependencies": {
     "next": "16.4.5",
