@@ -77,11 +77,11 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
                     };
                     return (
                       <button
-                        className={`activity-block ${block.kind}`}
+                        className={`activity-block ${block.kind}${block.source === "manual" ? " manual" : ""}${block.locked ? " locked" : ""}`}
                         type="button"
                         style={style}
                         key={`${employee.id}-${block.start}-${blockIndex}`}
-                        aria-label={`${employee.name}: ${activityLabels[block.kind]}, od ${block.start} do ${block.end}.${editingEnabled ? " Wybierz, aby zmienić czynność." : ""}`}
+                        aria-label={`${employee.name}: ${activityLabels[block.kind]}, od ${block.start} do ${block.end}.${block.source === "manual" ? " Korekta ręczna zablokowana przed automatem." : ""}${editingEnabled ? " Wybierz, aby zmienić czynność." : ""}`}
                         onClick={(event) => onBlockClick(employee.id, blockIndex, event.currentTarget)}
                       >
                         {activityLabels[block.kind]}
