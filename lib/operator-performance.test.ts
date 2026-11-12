@@ -56,6 +56,31 @@ test("counts only fully closed blocks in the plan to the snapshot cutoff", () =>
   assert.equal(model.unmappedOperators, 1);
 });
 
+test("keeps saved-plan employees visible even when the latest revision has no PICK/PAK blocks", () => {
+  const savedPlanEmployees: Employee[] = [{
+    id: "alice",
+    name: "Alice",
+    group: "Wydanie",
+    progress: { pick: 0, pack: 0 },
+    blocks: [{ start: "06:00", end: "14:00", kind: "presence" }],
+  }];
+  const execution = snapshot({
+    collectedAt: "2026-06-01T04:20:00.000Z",
+    pickTotal: 20,
+    packTotal: 10,
+    employeeExecution: [executionRow("alice", "alice.es", 20, 10)],
+    unmapped: [],
+  });
+
+  const model = buildOperatorPerformance(savedPlanEmployees, [profile("alice", "alice.es")], execution, norms, "2026-06-01");
+
+  assert.equal(model.rows.length, 1);
+  assert.equal(model.rows[0].id, "alice");
+  assert.equal(model.rows[0].processes.pick.plannedDay, 0);
+  assert.equal(model.rows[0].processes.pick.actualDay, 20);
+  assert.equal(model.rows[0].processes.pick.dayRealization, null);
+});
+
 test("does not treat missing ES data as zero", () => {
   const execution = snapshot({
     collectedAt: "2026-06-01T04:20:00.000Z",
