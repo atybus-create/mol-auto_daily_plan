@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-// @ts-expect-error Node strip-types runner uses explicit TS extension.
-import {
-  DEFAULT_PLANNING_AUTOMATION_SETTINGS,
-  normalizePlanningAutomationSettings,
-  validatePlanningAutomationSettings,
-} from "./planning-settings.ts";
+// @ts-expect-error Node's strip-types test runner requires the explicit TypeScript extension.
+import { DEFAULT_PLANNING_AUTOMATION_SETTINGS, normalizePlanningAutomationSettings, validatePlanningAutomationSettings } from "./planning-settings.ts";
 
 test("uses the agreed 06:00 / 08:00 / 12:00 / 16:00 defaults", () => {
   assert.deepEqual(
