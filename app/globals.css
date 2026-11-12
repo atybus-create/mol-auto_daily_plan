@@ -133,6 +133,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .activity-block.clean { background: var(--clean); border-color: #ded2ed; color: #70528f; }
 .activity-block.returns { background: var(--returns); border-color: #cde5e8; color: #347982; }
 .activity-block[aria-pressed="true"] { outline: 2px solid var(--navy-soft); outline-offset: 1px; }
+.activity-block.manual { box-shadow: inset 0 0 0 1px #31364a; }
+.manual-lock { margin-right: 5px; font-size: 7px; }
 .grid-rail { display: grid; grid-template-columns: var(--name-col) repeat(156, minmax(7px, 1fr)); min-height: 34px; background: #fafafd; border-top: 1px solid var(--line); }
 .rail-label { display: flex; align-items: center; padding: 0 11px; color: #898c99; font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .cutoff-marker { grid-row: 1; align-self: center; display: flex; align-items: center; gap: 5px; width: max-content; max-width: calc(100% - 4px); overflow: hidden; padding: 4px 7px; border: 1px solid #f1d2d7; border-radius: 3px; background: #fff6f7; color: #a74352; font-size: 9px; white-space: nowrap; }
@@ -261,7 +263,12 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .activity-dialog::backdrop { background: rgba(28, 29, 45, .38); }
 .activity-dialog h2 { margin: 5px 0 18px; font-size: 20px; }
 .activity-dialog label { display: block; margin-bottom: 6px; color: var(--ink-soft); font-size: 12px; }
-.activity-dialog select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink); }
+.activity-dialog select,
+.activity-dialog input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink); }
+.activity-dialog-hint { margin: -8px 0 18px; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+.activity-dialog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.activity-dialog-grid + label, .activity-dialog label + label { margin-top: 12px; }
+.manual-unlock-button { margin-right: auto; }
 .dialog-close { position: absolute; top: 11px; right: 13px; border: 0; background: transparent; color: #777a88; font-size: 24px; }
 .dialog-actions { display: flex; justify-content: end; gap: 8px; margin-top: 20px; }
 .toast { position: fixed; right: 20px; bottom: 20px; z-index: 10; max-width: calc(100% - 40px); padding: 11px 15px; transform: translateY(20px); opacity: 0; pointer-events: none; border-radius: 5px; background: var(--navy); color: white; box-shadow: var(--shadow); font-size: 12px; transition: opacity .18s ease, transform .18s ease; }

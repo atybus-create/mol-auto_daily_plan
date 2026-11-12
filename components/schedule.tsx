@@ -77,13 +77,14 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
                     };
                     return (
                       <button
-                        className={`activity-block ${block.kind}`}
+                        className={`activity-block ${block.kind}${block.source === "manual" ? " manual" : ""}`}
                         type="button"
                         style={style}
                         key={`${employee.id}-${block.start}-${blockIndex}`}
                         aria-label={`${employee.name}: ${activityLabels[block.kind]}, od ${block.start} do ${block.end}.${editingEnabled ? " Wybierz, aby zmienić czynność." : ""}`}
                         onClick={(event) => onBlockClick(employee.id, blockIndex, event.currentTarget)}
                       >
+                        {block.source === "manual" && <span className="manual-lock" aria-hidden="true">◆</span>}
                         {activityLabels[block.kind]}
                       </button>
                     );
