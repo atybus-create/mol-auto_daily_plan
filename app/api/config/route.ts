@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { signConfigEnvelope, type ConfigAction, type SignedConfigEnvelope } from "@/lib/config-auth";
+import { SETTINGS_ACCESS_COOKIE_NAME, verifySettingsAccessToken } from "@/lib/settings-auth";
 
 export const runtime = "nodejs";
 
 const ROOT = "https://n8n.estyl.team/webhook/";
-type MutableConfigAction = Exclude<ConfigAction, "readMorningOrders" | "readDayDemand" | "readExecution" | "generatePlan" | "getLatestPlan">;
+type MutableConfigAction = Extract<ConfigAction, "read" | "saveEmployee" | "saveNorms" | "savePlanning">;
 
 const PATHS: Record<MutableConfigAction, string> = {
   read: "mol-auto-plan-config-read",
@@ -47,6 +48,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!authorized(request)) return response({ ok: false, error: "Wymagane logowanie." }, 401);
+  if (!verifySettingsAccessToken(request.cookies.get(SETTINGS_ACCESS_COOKIE_NAME)?.value)) {
+    return response({ ok: false, error: "Ustawienia są zablokowane. Wpisz PIN ponownie." }, 403);
+  }
   const origin = request.headers.get("origin");
   if (origin && origin !== request.nextUrl.origin) return response({ ok: false, error: "Niedozwolone pochodzenie żądania." }, 403);
   try {
