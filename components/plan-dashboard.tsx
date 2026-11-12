@@ -16,6 +16,7 @@ type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]
 const defaultNorms: PlannerNorms = { pick_per_hour: 210, pack_per_hour: 70, pick_seconds: 22, pack_seconds: 50 };
 const EXECUTION_REFRESH_MS = 30 * 60 * 1000;
 const PLAN_REFRESH_MS = 5 * 60 * 1000;
+const DEMAND_REFRESH_MS = 5 * 60 * 1000;
 const leaderKeys = new Set(["magda_w", "aso", "alina"]);
 const receivingKeys = new Set(["mateusz", "nikita", "murat"]);
 
@@ -108,8 +109,12 @@ export function PlanDashboard() {
 
   useEffect(() => {
     const controller = new AbortController();
-    async function readDemand() {
-      setDemandLoading(true);
+    let inFlight = false;
+
+    async function readDemand(initial: boolean) {
+      if (inFlight) return;
+      inFlight = true;
+      if (initial) setDemandLoading(true);
       try {
         const response = await fetch(`/api/orders?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal });
         const result = await response.json() as OrdersDemandResponse;
@@ -117,16 +122,22 @@ export function PlanDashboard() {
         setDemand(result);
         setDemandError("");
       } catch (err) {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && initial) {
           setDemand(null);
           setDemandError(err instanceof Error ? err.message : "Brak planu zamówień.");
         }
       } finally {
-        if (!controller.signal.aborted) setDemandLoading(false);
+        inFlight = false;
+        if (!controller.signal.aborted && initial) setDemandLoading(false);
       }
     }
-    readDemand();
-    return () => controller.abort();
+
+    void readDemand(true);
+    const timer = window.setInterval(() => { void readDemand(false); }, DEMAND_REFRESH_MS);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+    };
   }, [date, reload]);
 
   useEffect(() => {
