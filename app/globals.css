@@ -117,7 +117,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .half-hour-tick { display: flex; align-items: center; height: 100%; padding-left: 3px; border-left: 1px solid #eaebef; color: #999ba6; font-size: 9px; white-space: nowrap; }
 .half-hour-tick span { position: absolute; bottom: 5px; left: 3px; color: #999ba6; font-size: 9px; white-space: nowrap; }
 .group-row { min-height: 29px; background: #f1f2f6; border-bottom: 1px solid #e2e3e9; }
-.group-label { position: sticky; left: 0; z-index: 2; grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #f1f2f6; color: #5e6172; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.group-label { position: sticky; left: 0; z-index: 2; grid-column: 1 / -1; display: flex; align-items: center; padding: 0 12px; background: #f1f2f6; color: #5e6172; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.group-toggle { width: 100%; min-height: 29px; display: flex; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; text-transform: inherit; }
+.group-toggle:hover { color: var(--ink); }
+.group-toggle-icon { width: 12px; flex: 0 0 12px; color: var(--red-dark); font-size: 11px; line-height: 1; text-align: center; }
+.group-count { color: #8d909d; font-weight: 600; letter-spacing: .035em; text-transform: none; }
 .employee-row { min-height: 39px; border-bottom: 1px solid #ededef; }
 .employee-name { position: sticky; left: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 0 11px; background: white; border-right: 1px solid var(--line); color: var(--ink); font-size: 12px; font-weight: 600; }
 .employee-name small { margin-left: auto; color: #a0a2ad; font-size: 10px; font-weight: 500; }
@@ -331,9 +335,8 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 /* MOL configuration — use existing ESTYL palette, violet reserved for duty. */
 :root { --duty-violet: #7b3cbb; --duty-violet-bg: #f3eafb; }
 .schedule-grid { --name-col: 224px; }
-.employee-name { flex-wrap: wrap; gap: 2px 6px; padding: 5px 10px; min-width: 0; }
+.employee-name { flex-wrap: nowrap; gap: 6px; padding: 5px 10px; min-width: 0; }
 .employee-name-main { flex: 1; min-width: 55px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.employee-name small { flex-basis: 100%; margin: 0; color: #848895; white-space: nowrap; }
 .employee-row.on-duty .employee-name { background: var(--duty-violet-bg); border-left: 3px solid var(--duty-violet); padding-left: 7px; }
 .employee-row.on-duty .activity-block.presence { outline: 2px solid var(--duty-violet); outline-offset: -2px; }
 .duty-label { flex: none; display: inline-flex; align-items: center; padding: 3px 5px; border-radius: 3px; background: var(--duty-violet); color: white; font-size: 9px; line-height: 1; font-weight: 800; letter-spacing: .035em; }
