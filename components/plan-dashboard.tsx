@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ManualPlanDialog } from "@/components/manual-plan-dialog";
 import { OrdersView } from "@/components/orders-view";
 import { SettingsPanel } from "@/components/settings-panel";
+import { SettingsPinDialog } from "@/components/settings-pin-dialog";
 import { WorkPlan } from "@/components/work-plan";
 import { DEFAULT_PLANNING_AUTOMATION_SETTINGS, normalizePlanningAutomationSettings } from "@/lib/planning-settings";
 import type { ActivityBlock, AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlanManualOverride, PlannerNorms, PlanningAutomationSettings } from "@/types/plan";
@@ -50,7 +51,14 @@ export function PlanDashboard() {
   const [execution, setExecution] = useState<ExecutionSnapshotResponse | null>(null);
   const [executionLoading, setExecutionLoading] = useState(true);
   const [editTarget, setEditTarget] = useState<{ employee: Employee; block: ActivityBlock } | null>(null);
+  const [settingsPinOpen, setSettingsPinOpen] = useState(false);
+  const [settingsPinBusy, setSettingsPinBusy] = useState(false);
+  const [settingsPinError, setSettingsPinError] = useState("");
   const latestPlanRequest = useRef(0);
+
+  useEffect(() => {
+    void fetch("/api/settings-access", { method: "DELETE" }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -335,6 +343,42 @@ export function PlanDashboard() {
     }
   }
 
+  async function unlockSettings(pin: string) {
+    if (settingsPinBusy) return;
+    setSettingsPinBusy(true);
+    setSettingsPinError("");
+    try {
+      const response = await fetch("/api/settings-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+      const data = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) throw new Error(data.error || "Nieprawidłowy PIN.");
+      setSettingsPinOpen(false);
+      setActiveTab("settings");
+    } catch (err) {
+      setSettingsPinError(err instanceof Error ? err.message : "Nie udało się odblokować ustawień.");
+    } finally {
+      setSettingsPinBusy(false);
+    }
+  }
+
+  function selectMainTab(tab: AppTab) {
+    setToast("");
+    if (tab === "settings") {
+      if (activeTab === "settings") return;
+      setSettingsPinError("");
+      setSettingsPinOpen(true);
+      return;
+    }
+    if (activeTab === "settings") {
+      void fetch("/api/settings-access", { method: "DELETE" }).catch(() => undefined);
+    }
+    setSettingsPinOpen(false);
+    setActiveTab(tab);
+  }
+
   const refresh = () => { setReload(x => x + 1); };
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
@@ -372,7 +416,7 @@ export function PlanDashboard() {
             <button key={tab} className={`page-tab${activeTab === tab ? " is-active" : ""}`}
               type="button" role="tab" id={`tab-${tab}`}
               aria-selected={activeTab===tab} aria-controls={`${tab}-panel`}
-              onClick={() => { setActiveTab(tab); setToast(""); }}>
+              onClick={() => selectMainTab(tab)}>
               {title} {hint && <span className="tab-hint">{hint}</span>}
             </button>
           ))}
@@ -392,6 +436,14 @@ export function PlanDashboard() {
           <span>{scheduleVersion ? `Grafik v${scheduleVersion} · ${sourceSheet || ""}` : "Brak danych dla wybranego dnia"} · konfiguracja v{configVersion || "—"}</span>
         </footer>
       </main>
+      {settingsPinOpen && (
+        <SettingsPinDialog
+          busy={settingsPinBusy}
+          error={settingsPinError}
+          onClose={() => { if (!settingsPinBusy) { setSettingsPinOpen(false); setSettingsPinError(""); } }}
+          onSubmit={pin => { void unlockSettings(pin); }}
+        />
+      )}
       {editTarget && (
         <ManualPlanDialog
           employee={editTarget.employee}
