@@ -22,7 +22,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function isQuarterTime(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\\d{2}:\\d{2}$/.test(value)) return false;
+  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) return false;
   const [hour, minute] = value.split(":").map(Number);
   return hour >= 0 && hour <= 23 && minute >= 0 && minute < 60 && minute % 15 === 0;
 }
