@@ -89,6 +89,8 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
       || a.display_name.localeCompare(b.display_name, "pl")
     ), [profiles]);
 
+  // These effects intentionally reset editable form drafts when fresh backend configuration arrives.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const current = profiles.find(p => p.employee_key === selectedKey) ?? profiles[0];
     if (current) {
@@ -101,6 +103,7 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
 
   useEffect(() => { setNormDraft(norms); }, [norms]);
   useEffect(() => { setPlanningDraft(normalizePlanningAutomationSettings(planning)); }, [planning]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function updatePlanningSlot(id: PlanningAutomationSlotId, patch: Partial<PlanningAutomationSettings["slots"][number]>) {
     setPlanningDraft(current => updateSlot(current, id, patch));
