@@ -5,6 +5,7 @@ import {
   formatNumber,
   targetFor,
 } from "@/lib/plan-utils";
+import { buildOperatorPerformance, type OperatorMapping, type ProcessPerformance } from "@/lib/operator-performance";
 import type { Employee, EmployeeProfile, ExecutionSnapshotResponse, GeneratedPlanSummary, OrdersDemandSnapshot, ProcessKind, PlannerNorms } from "@/types/plan";
 
 type WorkPlanProps = {
@@ -57,54 +58,11 @@ export function WorkPlan({
     { pickGoal: 0, packGoal: 0, hours: 0 },
   );
 
-  const profileMap = new Map(profiles.map(profile => [profile.employee_key, profile]));
-  const operatorMap = new Map(
-    (execution?.latest?.operators ?? []).map(operator => [normalizeEsLogin(operator.operator), operator]),
-  );
-  const pickToPackRatio = norms.pack_per_hour > 0 ? norms.pick_per_hour / norms.pack_per_hour : 3;
+  const performance = buildOperatorPerformance(employees, profiles, execution, norms, date);
 
-  const performanceRows = employees
-    .map(employee => {
-      const profile = profileMap.get(employee.id);
-      if (!profile || !profile.active || (!profile.can_pick && !profile.can_pack)) return null;
-
-      const pickMinutes = minutesByKind(employee, "pick");
-      const packMinutes = minutesByKind(employee, "pack");
-      const pickPlanned = (pickMinutes / 60) * norms.pick_per_hour;
-      const packPlanned = (packMinutes / 60) * norms.pack_per_hour;
-
-      const esLogin = normalizeEsLogin(profile.es_login);
-      const operator = esLogin ? operatorMap.get(esLogin) : undefined;
-      const pickActual = operator ? Number(operator.pick_completed) || 0 : null;
-      const packActual = operator ? Number(operator.pack_completed) || 0 : null;
-
-      const plannedEquivalent = pickToPackRatio > 0
-        ? pickPlanned / pickToPackRatio + packPlanned
-        : 0;
-      const actualEquivalent = operator && pickToPackRatio > 0
-        ? pickActual! / pickToPackRatio + packActual!
-        : null;
-      const realization = actualEquivalent !== null && plannedEquivalent > 0
-        ? (actualEquivalent / plannedEquivalent) * 100
-        : null;
-
-      return {
-        id: employee.id,
-        name: employee.name,
-        group: employee.group,
-        pickPlanned,
-        packPlanned,
-        pickActual,
-        packActual,
-        realization,
-        mapping: !profile.es_login?.trim() ? "missing_login" as const : operator ? "ok" as const : "no_data" as const,
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null);
-
-  const executionTimestamp = execution?.latest?.collected_at
-    ? new Date(execution.latest.collected_at).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
-    : null;
+  const executionTimestamp = formatWarsawTimestamp(execution?.latest?.collected_at ?? null);
+  const nextExecutionTimestamp = formatWarsawTimestamp(execution?.latest?.next_refresh_at ?? execution?.refresh?.next_refresh_at ?? null);
+  const executionStatus = describeExecution(execution);
 
   return (
     <section id="work-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-work">
@@ -180,7 +138,7 @@ export function WorkPlan({
         </div>
       </section>
 
-      {hasOperationalPlan && performanceRows.length > 0 && (
+      {hasOperationalPlan && performance.rows.length > 0 && (
         <section className="operator-performance-card card" aria-labelledby="operator-performance-title">
           <div className="section-heading operator-performance-heading">
             <div>
@@ -188,8 +146,11 @@ export function WorkPlan({
               <h2 id="operator-performance-title">Realizacja planu per pracownik</h2>
             </div>
             <div className="operator-performance-source">
-              <span className="refresh-dot" />
-              <span>{executionTimestamp ? `EasyStorage · raport efektywności · ${executionTimestamp}` : "Brak aktualnego raportu efektywności ES"}</span>
+              <span className={`refresh-dot ${executionStatus.tone}`} />
+              <span>
+                {executionTimestamp ? `EasyStorage · ${executionTimestamp} · ${executionStatus.label}` : executionStatus.label}
+                {nextExecutionTimestamp ? ` · następny snapshot ${nextExecutionTimestamp}` : ""}
+              </span>
             </div>
           </div>
           <div className="operator-performance-wrap">
@@ -197,50 +158,50 @@ export function WorkPlan({
               <thead>
                 <tr>
                   <th scope="col">Pracownik</th>
-                  <th scope="col">PICK plan / wykonanie</th>
-                  <th scope="col">PAK plan / wykonanie</th>
-                  <th scope="col">Realizacja</th>
+                  <th scope="col">Proces</th>
+                  <th scope="col">Plan do teraz</th>
+                  <th scope="col">Wykonanie do teraz</th>
+                  <th scope="col">% do teraz</th>
+                  <th scope="col">Plan dnia</th>
+                  <th scope="col">Wykonanie dnia</th>
+                  <th scope="col">% planu dnia</th>
+                  <th scope="col">Pozostało</th>
                 </tr>
               </thead>
               <tbody>
-                {performanceRows.map(row => (
-                  <tr key={row.id}>
-                    <td>
+                {performance.rows.flatMap(row => (["pick", "pack"] as const).map((process, processIndex) => {
+                  const metrics = row.processes[process];
+                  return (
+                  <tr key={`${row.id}-${process}`}>
+                    {processIndex === 0 && <td rowSpan={2}>
                       <div className="operator-person">
                         <strong>{row.name}</strong>
                         <small>{row.group}</small>
-                        {row.mapping === "missing_login" && <span className="mapping-warning">Brak loginu ES</span>}
-                        {row.mapping === "no_data" && <span className="mapping-warning">Brak danych operatora w ES</span>}
+                        {row.mapping !== "ok" && <span className="mapping-warning">{mappingLabel(row.mapping)}</span>}
                       </div>
-                    </td>
-                    <td>
-                      <span className="plan-actual-value">
-                        <b>{formatCapacity(row.pickPlanned)}</b>
-                        <i>/</i>
-                        <strong>{row.pickActual === null ? "—" : formatNumber(row.pickActual)}</strong>
-                      </span>
-                    </td>
-                    <td>
-                      <span className="plan-actual-value">
-                        <b>{formatCapacity(row.packPlanned)}</b>
-                        <i>/</i>
-                        <strong>{row.packActual === null ? "—" : formatNumber(row.packActual)}</strong>
-                      </span>
-                    </td>
-                    <td>
-                      {row.realization === null
-                        ? <span className="realization-badge unavailable">—</span>
-                        : <span className={`realization-badge ${realizationClass(row.realization)}`}>{Math.round(row.realization)}%</span>}
-                    </td>
+                    </td>}
+                    <td><span className={`process-pill ${process}`}>{process === "pick" ? "PICK" : "PAK"}</span></td>
+                    <MetricCells metrics={metrics} />
+                  </tr>
+                  );
+                }))}
+              </tbody>
+              <tfoot>
+                {(["pick", "pack"] as const).map((process, processIndex) => (
+                  <tr key={`team-${process}`}>
+                    {processIndex === 0 && <td rowSpan={2}><strong>Razem · zespół</strong></td>}
+                    <td><span className={`process-pill ${process}`}>{process === "pick" ? "PICK" : "PAK"}</span></td>
+                    <MetricCells metrics={performance.team[process]} />
                   </tr>
                 ))}
-              </tbody>
+              </tfoot>
             </table>
           </div>
           <div className="operator-performance-note">
-            <span>Plan: bloki PICK/PAK × aktualne normy.</span>
-            <span>Wykonanie: raport efektywności EasyStorage, mapowanie po loginie ES.</span>
-            <span>Realizacja: 1 PAK = {formatCapacity(pickToPackRatio)} PICK.</span>
+            <span>Plan do teraz: wyłącznie zakończone bloki × globalna norma procesu.</span>
+            <span>Wykonanie: dzienny licznik ES do czasu snapshotu; aktualizacja co 30 min.</span>
+            <span>PICK i PAK pozostają w swoich jednostkach — bez przeliczania między procesami.</span>
+            {performance.unmappedOperators > 0 && <span className="mapping-warning">Operatorzy ES bez mapowania: {performance.unmappedOperators}</span>}
           </div>
         </section>
       )}
@@ -340,20 +301,26 @@ function formatHours(value: number | null | undefined) {
   return typeof value === "number" ? `${value.toFixed(2).replace(".", ",")} h` : "—";
 }
 
-
-function minutesByKind(employee: Employee, kind: ProcessKind) {
-  return employee.blocks
-    .filter(block => block.kind === kind)
-    .reduce((sum, block) => sum + Math.max(0, timeToMinutes(block.end) - timeToMinutes(block.start)), 0);
+function MetricCells({ metrics }: { metrics: ProcessPerformance }) {
+  return <>
+    <td>{formatCapacity(metrics.plannedToCutoff)}</td>
+    <td>{formatActual(metrics.actualToCutoff)}</td>
+    <td><Realization value={metrics.cutoffRealization} /></td>
+    <td>{formatCapacity(metrics.plannedDay)}</td>
+    <td>{formatActual(metrics.actualDay)}</td>
+    <td><Realization value={metrics.dayRealization} /></td>
+    <td>{metrics.remaining === null ? "—" : formatCapacity(metrics.remaining)}</td>
+  </>;
 }
 
-function timeToMinutes(value: string) {
-  const [hours, minutes] = value.split(":").map(Number);
-  return (Number(hours) || 0) * 60 + (Number(minutes) || 0);
+function Realization({ value }: { value: number | null }) {
+  return value === null
+    ? <span className="realization-badge unavailable">—</span>
+    : <span className={`realization-badge ${realizationClass(value)}`}>{Math.round(value)}%</span>;
 }
 
-function normalizeEsLogin(value: string | null | undefined) {
-  return String(value ?? "").trim().toLocaleLowerCase("pl-PL");
+function formatActual(value: number | null) {
+  return value === null ? "—" : formatCapacity(value);
 }
 
 function formatCapacity(value: number) {
@@ -365,4 +332,36 @@ function realizationClass(value: number) {
   if (value >= 100) return "good";
   if (value >= 90) return "near";
   return "behind";
+}
+
+function mappingLabel(mapping: OperatorMapping) {
+  if (mapping === "missing_profile") return "Brak profilu pracownika";
+  if (mapping === "missing_login") return "Brak loginu ES";
+  if (mapping === "duplicate_login") return "Login ES przypisany wielokrotnie";
+  return "Brak danych operatora w ES";
+}
+
+function formatWarsawTimestamp(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("pl-PL", {
+    timeZone: "Europe/Warsaw",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function describeExecution(execution: ExecutionSnapshotResponse | null) {
+  if (!execution?.latest) return { label: "Brak danych wykonania ES", tone: "unavailable" };
+  if (execution.status === "error" || execution.latest.data_status.toUpperCase().includes("ERROR")) {
+    return { label: "Błąd danych ES", tone: "error" };
+  }
+  if (execution.status === "partial") return { label: "Dane częściowe", tone: "warning" };
+  if (execution.status === "stale" || execution.latest.age_minutes > 35) {
+    return { label: `Dane nieaktualne · ${Math.round(execution.latest.age_minutes)} min`, tone: "warning" };
+  }
+  return { label: `Aktualne · ${Math.round(execution.latest.age_minutes)} min temu`, tone: "fresh" };
 }
