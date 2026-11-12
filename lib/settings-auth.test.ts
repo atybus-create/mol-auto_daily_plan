@@ -1,6 +1,6 @@
+// @ts-nocheck -- Node's strip-types test runner needs explicit .ts imports.
 import assert from "node:assert/strict";
 import test from "node:test";
-// @ts-ignore Node's strip-types test runner requires the explicit TypeScript extension.
 import {
   createSettingsAccessToken,
   defaultSettingsPinDigest,
