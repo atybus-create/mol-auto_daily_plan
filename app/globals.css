@@ -475,6 +475,8 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .realization-badge.behind { background: #fff0f2; color: #a23f50; }
 .realization-badge.unavailable { background: #f1f2f5; color: #9295a1; }
 .operator-performance-note { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 15px; border-top: 1px solid var(--line); background: #fafafd; color: #858896; font-size: 9px; line-height: 1.45; }
+.operator-performance-state { padding: 18px 20px; border-top: 1px solid var(--line); background: #fafafd; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+.operator-performance-state.warning { background: #fffaf0; color: #8a641c; }
 .operator-performance-source .refresh-dot.warning { background: #c18a24; }
 .operator-performance-source .refresh-dot.error { background: #b54859; }
 .operator-performance-source .refresh-dot.unavailable { background: #9b9da7; }
