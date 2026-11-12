@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { signConfigEnvelope, type SignedConfigEnvelope } from "@/lib/config-auth";
 import { normalizeManualOverrideInput } from "@/lib/manual-overrides";
-import type { GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandSnapshot } from "@/types/plan";
+import type { GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandSnapshot, PlanManualOverride } from "@/types/plan";
 
 export const runtime = "nodejs";
 
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     const date = typeof body.date === "string" ? body.date : "";
     const demand = body.demand as OrdersDemandSnapshot | undefined;
     const trigger = body.trigger === "MANUAL" ? "MANUAL" : "BUTTON";
-    let manualOverrides = [];
+    let manualOverrides: PlanManualOverride[] = [];
     if (trigger === "MANUAL") {
       if (!Array.isArray(body.manual_overrides) || body.manual_overrides.length < 1 || body.manual_overrides.length > 20) {
         return respond({ ok: false, error: "invalid_input", message: "Korekta ręczna wymaga od 1 do 20 bloków." } satisfies GeneratedPlanError, 400);
