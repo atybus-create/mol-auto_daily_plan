@@ -359,7 +359,8 @@ export function PlanDashboard() {
       if (!response.ok || !result.ok) {
         if (response.status === 409) {
           await refreshPlanAfterConflict();
-          throw new Error("Plan został zmieniony w międzyczasie. Wczytano aktualną wersję. Sprawdź i ponów korektę.");
+          setEditTarget(null);
+          throw new Error("Plan został zmieniony w międzyczasie. Wczytano aktualną wersję. Otwórz blok ponownie i ponów korektę.");
         }
         throw new Error(result.ok ? "Nie udało się zapisać korekty." : (result.message || result.error));
       }
