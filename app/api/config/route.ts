@@ -6,7 +6,7 @@ import { SETTINGS_ACCESS_COOKIE_NAME, verifySettingsAccessToken } from "@/lib/se
 export const runtime = "nodejs";
 
 const ROOT = "https://n8n.estyl.team/webhook/";
-type MutableConfigAction = Exclude<ConfigAction, "readMorningOrders" | "readDayDemand" | "readExecution" | "generatePlan" | "getLatestPlan">;
+type MutableConfigAction = Extract<ConfigAction, "read" | "saveEmployee" | "saveNorms" | "savePlanning">;
 
 const PATHS: Record<MutableConfigAction, string> = {
   read: "mol-auto-plan-config-read",
