@@ -94,9 +94,22 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json() as { date?: unknown; demand?: unknown };
+    const body = await request.json() as {
+      date?: unknown;
+      demand?: unknown;
+      trigger?: unknown;
+      trigger_ref?: unknown;
+      manual_overrides?: unknown;
+      remove_override_ids?: unknown;
+    };
     const date = typeof body.date === "string" ? body.date : "";
     const demand = body.demand as OrdersDemandSnapshot | undefined;
+    const trigger = body.trigger === "MANUAL" ? "MANUAL" : "BUTTON";
+    const triggerRef = typeof body.trigger_ref === "string" ? body.trigger_ref.slice(0, 120) : "";
+    const manualOverrides = Array.isArray(body.manual_overrides) ? body.manual_overrides : [];
+    const removeOverrideIds = Array.isArray(body.remove_override_ids)
+      ? body.remove_override_ids.filter((value): value is string => typeof value === "string" && value.length > 0).slice(0, 100)
+      : [];
 
     if (!validDate(date) || !demand || demand.ok !== true || demand.business_date !== date || demand.status !== "ready") {
       const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Plan można wygenerować tylko dla kompletnego DAY DEMAND." };
@@ -116,6 +129,10 @@ export async function POST(request: NextRequest) {
           required_today: demand.required_today,
           generated_at: demand.generated_at,
         },
+        trigger,
+        trigger_ref: triggerRef,
+        manual_overrides: manualOverrides,
+        remove_override_ids: removeOverrideIds,
       },
     };
 
