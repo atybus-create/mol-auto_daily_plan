@@ -1,4 +1,6 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useState, type CSSProperties } from "react";
 import { activityLabels, isMonday, SLOT_COUNT, slotsAt, timeToMinutes } from "@/lib/plan-utils";
 import type { Employee } from "@/types/plan";
 
@@ -10,8 +12,15 @@ type ScheduleProps = {
   onBlockClick: (employeeId: string, blockIndex: number, button: HTMLButtonElement) => void;
 };
 
+const groupDisplayNames: Record<string, string> = {
+  "Lider / Specjalista": "Liderzy",
+  "Przyjęcia": "Przyjęcie",
+  "Wydanie": "Wydanie",
+};
+
 export function Schedule({ employees, date, collapsed, editingEnabled, onBlockClick }: ScheduleProps) {
   const monday = isMonday(date);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const preferredGroups = ["Lider / Specjalista", "Przyjęcia", "Wydanie"];
   const groups = [...preferredGroups, ...Array.from(new Set(employees.map(employee => employee.group))).filter(group => !preferredGroups.includes(group))]
     .filter(group => employees.some(employee => employee.group === group));
@@ -20,6 +29,10 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
     { time: "12:00", label: monday ? "Pozostali + InPost / Orlen (pn)" : "Pozostali kurierzy" },
     ...(!monday ? [{ time: "16:00", label: "InPost / Orlen" }] : []),
   ];
+
+  function toggleGroup(group: string) {
+    setCollapsedGroups(current => ({ ...current, [group]: !current[group] }));
+  }
 
   return (
     <div className="schedule-scroll" tabIndex={0} aria-label="Harmonogram pracowników — przewijaj poziomo">
@@ -55,18 +68,31 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
 
         {groups.map((group) => {
           const groupEmployees = employees.filter((employee) => employee.group === group);
+          const groupCollapsed = collapsed || Boolean(collapsedGroups[group]);
+          const displayName = groupDisplayNames[group] || group;
           return (
             <div key={group}>
               <div className="group-row">
-                <div className="group-label">{group} · {groupEmployees.length} osób</div>
+                <div className="group-label">
+                  <button
+                    className="group-toggle"
+                    type="button"
+                    aria-expanded={!groupCollapsed}
+                    aria-label={`${groupCollapsed ? "Rozwiń" : "Zwiń"} grupę ${displayName}`}
+                    onClick={() => toggleGroup(group)}
+                  >
+                    <span className="group-toggle-icon" aria-hidden="true">{groupCollapsed ? "▸" : "▾"}</span>
+                    <span>{displayName}</span>
+                    <span className="group-count">· {groupEmployees.length} osób</span>
+                  </button>
+                </div>
               </div>
 
-              {!collapsed && groupEmployees.map((employee) => (
+              {!groupCollapsed && groupEmployees.map((employee) => (
                 <div className={`employee-row${employee.duty ? " on-duty" : ""}`} key={employee.id}>
                   <div className="employee-name" style={{ gridColumn: 1 }}>
                     <span className="employee-name-main">{employee.name}</span>
                     {employee.duty && <span className="duty-label" title="Dyżur zgodnie z grafikiem Google">DYŻUR</span>}
-                    <small>{employee.blocks.map((block) => `${block.start}–${block.end}`).join(" · ")}</small>
                   </div>
                   {Array.from({ length: SLOT_COUNT }, (_, slot) => (
                     <div className="employee-cell" style={{ gridColumn: slot + 2 }} aria-hidden="true" key={slot} />
