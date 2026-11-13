@@ -81,8 +81,8 @@ export function WorkPlan({
   const packDemandRbh = targetCurrent !== null
     ? targetCurrent / norms.pack_per_hour
     : null;
-  const pickScheduledRbh = planSummary?.planned_pick_rbh ?? null;
-  const packScheduledRbh = planSummary?.planned_pack_rbh ?? null;
+  const pickScheduledRbh = planAvailable ? sumScheduledRbh(employees, "pick") : null;
+  const packScheduledRbh = planAvailable ? sumScheduledRbh(employees, "pack") : null;
 
   return (
     <section id="work-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-work">
@@ -344,6 +344,19 @@ export function WorkPlan({
       )}
     </section>
   );
+}
+
+function toMinutes(time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
+}
+
+function sumScheduledRbh(employees: Employee[], kind: "pick" | "pack") {
+  const minutes = employees.reduce((total, employee) => total + employee.blocks.reduce((sum, block) => {
+    if (block.kind !== kind) return sum;
+    return sum + Math.max(0, toMinutes(block.end) - toMinutes(block.start));
+  }, 0), 0);
+  return minutes / 60;
 }
 
 function RbhDemandCard({ process, demand, scheduled }: { process: "PICK" | "PAK"; demand: number | null; scheduled: number | null }) {
