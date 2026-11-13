@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { signConfigEnvelope, type SignedConfigEnvelope } from "@/lib/config-auth";
 
-const N8N_SCHEDULE_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-schedule";
+const N8N_SCHEDULE_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-schedule-secure-test";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,14 +12,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Nieprawidłowa data.", employees: [] }, { status: 400 });
     }
 
+    const envelope: SignedConfigEnvelope = {
+      action: "readSchedule",
+      issued_at: Date.now(),
+      payload: { date },
+    };
+
     const response = await fetch(N8N_SCHEDULE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date }),
+      body: JSON.stringify({ envelope, signature: signConfigEnvelope(envelope) }),
       cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "Backend grafiku zwrócił nieprawidłową odpowiedź.", employees: [] },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json(data, {
       status: response.ok ? 200 : response.status,
       headers: { "Cache-Control": "no-store" },
