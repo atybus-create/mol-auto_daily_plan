@@ -8,7 +8,7 @@ import {
   SETTINGS_ACCESS_TTL_SECONDS,
   settingsPinDigest,
   verifySettingsAccessToken,
-  verifySettingsPin,
+  verifySettingsPinSource,
 } from "@/lib/settings-auth";
 
 export const runtime = "nodejs";
@@ -79,9 +79,24 @@ export async function POST(request: NextRequest) {
     if (!current.ok) return response({ ok: false, error: String(current.data.error || "Nie udało się sprawdzić PIN-u.") }, current.status || 502);
 
     const storedDigest = typeof current.data.settings_pin_hash === "string" ? current.data.settings_pin_hash : "";
-    if (!verifySettingsPin(pin, storedDigest)) {
+    const verification = verifySettingsPinSource(pin, storedDigest);
+    if (!verification) {
       await new Promise(resolve => setTimeout(resolve, 450));
       return response({ ok: false, error: "Nieprawidłowy PIN." }, 401);
+    }
+
+    if (verification === "legacy") {
+      const expectedVersion = Number(current.data.version);
+      if (Number.isSafeInteger(expectedVersion)) {
+        try {
+          await backend("saveSettingsPin", {
+            settings_pin_hash: settingsPinDigest(pin),
+            expected_version: expectedVersion,
+          });
+        } catch {
+          // Migration is best-effort. A valid PIN must still unlock settings.
+        }
+      }
     }
 
     return setAccessCookie(response({ ok: true, unlocked: true }));
