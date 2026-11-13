@@ -96,35 +96,30 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
         <section className="card orders-table-card" aria-labelledby="orders-flow-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">{v3 ? "BASELINE · REAL · NOWCAST" : v2 ? "PLAN · RZECZYWISTOŚĆ" : "PROGNOZA BAZOWA"}</p>
+              <p className="eyebrow">{v3 ? "PLAN · SPŁYW RZECZYWISTY" : v2 ? "PLAN · RZECZYWISTOŚĆ" : "PROGNOZA BAZOWA"}</p>
               <h2 id="orders-flow-title">Napływ co 30 minut</h2>
             </div>
             <div className="refresh-info">
               <span className="refresh-dot" />
-              <span>{v3 ? "Realny spływ aktualizuje również prognozę przyszłych slotów" : v2 ? "Zakończone sloty zastępują prognozę realnym spływem" : "Fallback · bez korekty realnym spływem"}</span>
+              <span>{v3 ? "Spływ pokazujemy wyłącznie dla zakończonych przedziałów" : v2 ? "Zakończone sloty zastępują prognozę realnym spływem" : "Fallback · bez korekty realnym spływem"}</span>
             </div>
           </div>
 
           {demand.slots.length === 20 ? (
             <div className="table-wrap orders-flow-wrap">
-              <table>
+              <table className={v3 ? "orders-v3-table" : undefined}>
                 <thead>
                   {v3 ? (
-                    <>
-                      <tr>
-                        <th rowSpan={2}>Przedział</th>
-                        <th colSpan={2}>.PL</th>
-                        <th colSpan={2}>_PL</th>
-                        <th rowSpan={2}>Razem</th>
-                        <th rowSpan={2}>Do realizacji</th>
-                      </tr>
-                      <tr>
-                        <th>Baseline</th>
-                        <th>Real / nowcast</th>
-                        <th>Baseline</th>
-                        <th>Real / nowcast</th>
-                      </tr>
-                    </>
+                    <tr>
+                      <th>Przedział</th>
+                      <th>Plan .PL</th>
+                      <th>Plan _PL</th>
+                      <th>Spływ .PL</th>
+                      <th>Spływ _PL</th>
+                      <th>Plan .PL + _PL</th>
+                      <th>Spływ .PL + _PL</th>
+                      <th>Różnica .PL + _PL</th>
+                    </tr>
                   ) : v2 ? (
                     <tr>
                       <th>Przedział</th>
@@ -147,22 +142,23 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                   {demand.slots.map(slot => {
                     if (v3) {
                       const nowcast = slot as V3ForecastSlot;
-                      const isActual = nowcast.effective_source === "actual" && Boolean(nowcast.actual);
+                      const actual = nowcast.actual;
+                      const isActual = nowcast.effective_source === "actual" && Boolean(actual);
+                      const planTotal = nowcast.baseline.total;
+                      const actualTotal = isActual ? actual!.all_orders : null;
+                      const difference = actualTotal === null ? null : actualTotal - planTotal;
                       return (
                         <tr key={slot.slot_start}>
                           <td>{slot.slot_start}–{slot.slot_end}</td>
                           <td>{formatNumber(nowcast.baseline.pl)}</td>
-                          <td>
-                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.gross_pl : nowcast.nowcast.pl)}</span>
-                            <small className="after-cutoff">{isActual ? " realnie" : " nowcast"}</small>
-                          </td>
                           <td>{formatNumber(nowcast.baseline.under)}</td>
-                          <td>
-                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.gross_under : nowcast.nowcast.under)}</span>
-                            <small className="after-cutoff">{isActual ? " realnie" : " nowcast"}</small>
+                          <td>{isActual ? formatNumber(actual!.gross_pl) : "—"}</td>
+                          <td>{isActual ? formatNumber(actual!.gross_under) : "—"}</td>
+                          <td>{formatNumber(planTotal)}</td>
+                          <td>{actualTotal === null ? "—" : formatNumber(actualTotal)}</td>
+                          <td className={inflowDifferenceClass(difference)}>
+                            {difference === null ? "—" : formatSigned(difference)}
                           </td>
-                          <td>{formatNumber(nowcast.nowcast.total)}</td>
-                          <td><span className="eligible-number">{formatNumber(nowcast.effective_today)}</span></td>
                         </tr>
                       );
                     }
@@ -202,31 +198,26 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                   {v3 ? (
                     <>
                       <tr>
-                        <td>Zakończone sloty do {liveLastSlot || "teraz"}</td>
+                        <td>Razem zakończone do {liveLastSlot || "teraz"}</td>
                         <td>{formatNumber(sumMeasuredBaselineBucket(demand, "pl"))}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.gross_pl_actual)}</td>
                         <td>{formatNumber(sumMeasuredBaselineBucket(demand, "under"))}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.gross_pl_actual)}</td>
                         <td>{formatNumber(demand.real_inflow_to_now.gross_under_actual)}</td>
+                        <td>{formatNumber(sumMeasuredBaselineTotal(demand))}</td>
                         <td>{formatNumber(demand.real_inflow_to_now.all_actual)}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
+                        <td className={inflowDifferenceClass(demand.real_inflow_to_now.all_actual - sumMeasuredBaselineTotal(demand))}>
+                          {formatSigned(demand.real_inflow_to_now.all_actual - sumMeasuredBaselineTotal(demand))}
+                        </td>
                       </tr>
                       <tr>
-                        <td>Pozostało {liveLastSlot || "teraz"}–16:00</td>
+                        <td>Pozostały plan {liveLastSlot || "teraz"}–16:00</td>
                         <td>{formatNumber(sumFutureBaselineBucket(demand, "pl"))}</td>
-                        <td>{formatNumber(demand.remaining_forecast.pl)}</td>
                         <td>{formatNumber(sumFutureBaselineBucket(demand, "under"))}</td>
-                        <td>{formatNumber(demand.remaining_forecast.under)}</td>
-                        <td>{formatNumber(demand.remaining_forecast.gross_total)}</td>
-                        <td>{formatNumber(demand.remaining_forecast.eligible_today)}</td>
-                      </tr>
-                      <tr>
-                        <td>Napływ 06:00–16:00</td>
-                        <td>{formatMaybe(demand.nowcast_forecast.baseline_pl)}</td>
-                        <td>{formatMaybe(demand.nowcast_forecast.final_pl)}</td>
-                        <td>{formatMaybe(demand.nowcast_forecast.baseline_under)}</td>
-                        <td>{formatMaybe(demand.nowcast_forecast.final_under)}</td>
-                        <td>{formatMaybe(demand.nowcast_forecast.final_gross)}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual + demand.remaining_forecast.eligible_today)}</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>{formatNumber(sumFutureBaselineTotal(demand))}</td>
+                        <td>—</td>
+                        <td>—</td>
                       </tr>
                     </>
                   ) : v2 ? (
@@ -269,7 +260,7 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
 
           <div className="orders-table-note">
             {v3
-              ? <><span>Realne dane zastępują zakończone sloty i przeliczają prognozę pozostałej części dnia.</span><span>Brak odczytu nie jest traktowany jako zero.</span></>
+              ? <><span>Spływ i różnica są pokazywane tylko dla zakończonych przedziałów.</span><span>Przyszłe przedziały mają wyłącznie plan; nowcast pozostaje osobną prognozą w kartach powyżej.</span></>
               : v2
                 ? <><span>Realne dane zastępują prognozę tylko dla zakończonych przedziałów.</span><span>Brak odczytu nie jest traktowany jako zero.</span></>
                 : <><span>Widok awaryjny korzysta z prognozy bazowej.</span><span>Korekta realnym spływem jest chwilowo niedostępna.</span></>}
@@ -345,6 +336,19 @@ function sumMeasuredBaselineBucket(demand: DayDemandV3Snapshot, bucket: "pl" | "
 
 function sumFutureBaselineBucket(demand: DayDemandV3Snapshot, bucket: "pl" | "under") {
   return demand.slots.reduce((sum, slot) => sum + (!slot.actual ? slot.baseline[bucket] : 0), 0);
+}
+
+function sumMeasuredBaselineTotal(demand: DayDemandV3Snapshot) {
+  return demand.slots.reduce((sum, slot) => sum + (slot.actual ? slot.baseline.total : 0), 0);
+}
+
+function sumFutureBaselineTotal(demand: DayDemandV3Snapshot) {
+  return demand.slots.reduce((sum, slot) => sum + (!slot.actual ? slot.baseline.total : 0), 0);
+}
+
+function inflowDifferenceClass(value: number | null) {
+  if (value === null || value === 0) return undefined;
+  return value > 0 ? "inflow-diff-positive" : "inflow-diff-negative";
 }
 
 function varianceClass(value: number | null) {
