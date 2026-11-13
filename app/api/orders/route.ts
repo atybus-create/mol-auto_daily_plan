@@ -6,6 +6,7 @@ import type { DayDemandError, OrdersDemandResponse } from "@/types/plan";
 
 export const runtime = "nodejs";
 
+const V3_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-day-demand-v3";
 const V2_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-day-demand-v2";
 const V1_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-day-demand";
 
@@ -40,6 +41,17 @@ export async function GET(request: NextRequest) {
   const date = request.nextUrl.searchParams.get("date") ?? "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
     return unavailable("Nieprawidłowa data.", 400);
+  }
+
+  try {
+    const v3 = await callUpstream(V3_URL, date);
+    if (v3.response.ok && v3.body && typeof v3.body === "object" && (v3.body as { ok?: unknown }).ok === true) {
+      const validation = validateOrdersDemandSnapshot(v3.body, date);
+      if (validation.valid) return respond(v3.body as OrdersDemandResponse);
+      console.error("Invalid orders V3 response", validation.errors);
+    }
+  } catch (error) {
+    console.error("Orders V3 unavailable, using V2 fallback", error);
   }
 
   try {
