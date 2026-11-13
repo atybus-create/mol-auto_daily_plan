@@ -286,7 +286,7 @@ export function PlanDashboard() {
   }
 
   async function generatePlan() {
-    if (planLoading || !demand || demand.status !== "ready") return;
+    if (planLoading) return;
     const version = currentVersion();
     if (!version) { setToast("Brak numeru wersji planu. Odśwież plan przed przeliczeniem."); return; }
     latestPlanRequest.current += 1;
@@ -307,6 +307,7 @@ export function PlanDashboard() {
         throw new Error(result.ok ? "Nie udało się wygenerować planu." : (result.message || result.error));
       }
       setGeneratedPlan(result);
+      setReload(x => x + 1);
       setActiveTab("work");
       const detail = result.status === "DRAFT_READY"
         ? "Plan roboczy wygenerowany."
@@ -438,7 +439,7 @@ export function PlanDashboard() {
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
           <button className="button button-secondary" type="button" disabled={scheduleLoading || configLoading} onClick={refresh}>↻ Odśwież dane</button>
-          <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading || demandLoading || executionLoading || !demand || demand.status !== "ready"} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>
+          <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>
           <form action="/api/auth/logout" method="post" className="logout-form">
             <button className="button button-secondary logout-button" type="submit">Wyloguj</button>
           </form>
