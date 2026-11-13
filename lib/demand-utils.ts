@@ -166,7 +166,114 @@ export function asDayDemandSnapshot(value: unknown, requestedDate?: string): Day
 
 
 export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: string): DemandValidation {
-  if (!isRecord(value) || value.contract_version !== 2) return validateDayDemandSnapshot(value, requestedDate);
+  if (!isRecord(value) || !("contract_version" in value)) return validateDayDemandSnapshot(value, requestedDate);
+
+  if (value.contract_version === 3) {
+    const baselineRequired = value.required_today_baseline;
+    const plan = isRecord(value.plan_gross) ? value.plan_gross : null;
+    const baselineAfter = plan && isNonNegativeNumber(plan.total) && isNonNegativeNumber(baselineRequired)
+      ? plan.total - baselineRequired
+      : null;
+
+    const baselineView = {
+      ...value,
+      forecast_kind: "DAILY_BASELINE",
+      required_today: baselineRequired,
+      after_cutoff: baselineAfter,
+    };
+    const errors = [...validateDayDemandSnapshot(baselineView, requestedDate).errors];
+
+    for (const key of ["required_today_baseline", "corrected_required_today", "corrected_plan_gross_total"] as const) {
+      if (value[key] !== null && !isNonNegativeNumber(value[key])) errors.push(`${key}: oczekiwano liczby nieujemnej albo null`);
+    }
+    if (value.correction_vs_plan !== null && (typeof value.correction_vs_plan !== "number" || !Number.isFinite(value.correction_vs_plan))) {
+      errors.push("correction_vs_plan: oczekiwano liczby albo null");
+    }
+
+    if (!isRecord(value.nowcast_forecast)) {
+      errors.push("nowcast_forecast: brak danych");
+    } else {
+      for (const key of ["remaining_gross", "confidence"] as const) {
+        if (!isNonNegativeNumber(value.nowcast_forecast[key])) errors.push(`nowcast_forecast.${key}: oczekiwano liczby nieujemnej`);
+      }
+      for (const key of ["baseline_gross", "projected_final_from_pace", "final_gross"] as const) {
+        if (value.nowcast_forecast[key] !== null && !isNonNegativeNumber(value.nowcast_forecast[key])) {
+          errors.push(`nowcast_forecast.${key}: oczekiwano liczby nieujemnej albo null`);
+        }
+      }
+      if (typeof value.nowcast_forecast.guardrail_applied !== "boolean") {
+        errors.push("nowcast_forecast.guardrail_applied: oczekiwano boolean");
+      }
+      if (isNonNegativeNumber(value.nowcast_forecast.confidence) && value.nowcast_forecast.confidence > 1) {
+        errors.push("nowcast_forecast.confidence: wartość powinna być w zakresie 0–1");
+      }
+    }
+
+    if (!isRecord(value.real_inflow_to_now)) {
+      errors.push("real_inflow_to_now: brak danych");
+    } else {
+      for (const key of ["measured_slots", "eligible_actual", "all_actual", "pl_actual", "under_actual"] as const) {
+        if (!isNonNegativeNumber(value.real_inflow_to_now[key])) errors.push(`real_inflow_to_now.${key}: oczekiwano liczby nieujemnej`);
+      }
+      if (value.real_inflow_to_now.variance_to_baseline_gross !== null
+          && (typeof value.real_inflow_to_now.variance_to_baseline_gross !== "number"
+            || !Number.isFinite(value.real_inflow_to_now.variance_to_baseline_gross))) {
+        errors.push("real_inflow_to_now.variance_to_baseline_gross: oczekiwano liczby albo null");
+      }
+    }
+
+    if (!isRecord(value.remaining_forecast)) {
+      errors.push("remaining_forecast: brak danych");
+    } else {
+      for (const key of ["eligible_today", "after_cutoff", "gross_total"] as const) {
+        if (!isNonNegativeNumber(value.remaining_forecast[key])) errors.push(`remaining_forecast.${key}: oczekiwano liczby nieujemnej`);
+      }
+    }
+
+    if (Array.isArray(value.slots)) {
+      value.slots.forEach((slot, index) => {
+        if (!isRecord(slot)) return;
+        if (!["actual", "nowcast"].includes(String(slot.effective_source))) {
+          errors.push(`slots[${index}].effective_source: nieprawidłowe źródło V3`);
+        }
+        if (!isNonNegativeNumber(slot.effective_today)) {
+          errors.push(`slots[${index}].effective_today: oczekiwano liczby nieujemnej`);
+        }
+        if (!isRecord(slot.baseline)) {
+          errors.push(`slots[${index}].baseline: brak danych`);
+        } else {
+          for (const key of ["total", "eligible_today", "after_cutoff"] as const) {
+            if (!isNonNegativeNumber(slot.baseline[key])) errors.push(`slots[${index}].baseline.${key}: oczekiwano liczby nieujemnej`);
+          }
+        }
+        if (!isRecord(slot.nowcast)) {
+          errors.push(`slots[${index}].nowcast: brak danych`);
+        } else {
+          for (const key of ["total", "eligible_today", "after_cutoff"] as const) {
+            if (!isNonNegativeNumber(slot.nowcast[key])) errors.push(`slots[${index}].nowcast.${key}: oczekiwano liczby nieujemnej`);
+          }
+          if (!Array.isArray(slot.nowcast.by_carrier)) errors.push(`slots[${index}].nowcast.by_carrier: oczekiwano tablicy`);
+        }
+        if (slot.variance_to_forecast !== null && (typeof slot.variance_to_forecast !== "number" || !Number.isFinite(slot.variance_to_forecast))) {
+          errors.push(`slots[${index}].variance_to_forecast: oczekiwano liczby albo null`);
+        }
+      });
+    }
+
+    if (isNonNegativeNumber(value.required_today) && isNonNegativeNumber(value.corrected_required_today)
+        && Math.abs(value.required_today - value.corrected_required_today) > 0.001) {
+      errors.push("required_today: powinno być równe corrected_required_today w kontrakcie V3");
+    }
+    if (isNonNegativeNumber(value.required_today) && isNonNegativeNumber(value.after_cutoff)
+        && isNonNegativeNumber(value.corrected_plan_gross_total)
+        && Math.abs(value.required_today + value.after_cutoff - value.corrected_plan_gross_total) > 0.001) {
+      errors.push("V3: required_today + after_cutoff powinno być równe corrected_plan_gross_total");
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  if (value.contract_version !== 2) return validateDayDemandSnapshot(value, requestedDate);
 
   const baselineRequired = value.required_today_baseline;
   const plan = isRecord(value.plan_gross) ? value.plan_gross : null;
@@ -238,3 +345,4 @@ export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: str
 
   return { valid: errors.length === 0, errors };
 }
+
