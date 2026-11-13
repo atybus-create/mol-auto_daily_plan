@@ -193,13 +193,23 @@ export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: str
     if (!isRecord(value.nowcast_forecast)) {
       errors.push("nowcast_forecast: brak danych");
     } else {
-      for (const key of ["remaining_gross", "confidence"] as const) {
+      for (const key of ["remaining_pl", "remaining_under", "remaining_gross", "confidence"] as const) {
         if (!isNonNegativeNumber(value.nowcast_forecast[key])) errors.push(`nowcast_forecast.${key}: oczekiwano liczby nieujemnej`);
       }
-      for (const key of ["baseline_gross", "projected_final_from_pace", "final_gross"] as const) {
+      for (const key of ["baseline_pl", "baseline_under", "baseline_gross", "projected_final_from_pace", "final_pl", "final_under", "final_gross"] as const) {
         if (value.nowcast_forecast[key] !== null && !isNonNegativeNumber(value.nowcast_forecast[key])) {
           errors.push(`nowcast_forecast.${key}: oczekiwano liczby nieujemnej albo null`);
         }
+      }
+      if (isNonNegativeNumber(value.nowcast_forecast.final_pl) && isNonNegativeNumber(value.nowcast_forecast.final_under)
+          && isNonNegativeNumber(value.nowcast_forecast.final_gross)
+          && Math.abs(value.nowcast_forecast.final_pl + value.nowcast_forecast.final_under - value.nowcast_forecast.final_gross) > 0.001) {
+        errors.push("nowcast_forecast: final_pl + final_under jest niespójne z final_gross");
+      }
+      if (isNonNegativeNumber(value.nowcast_forecast.remaining_pl) && isNonNegativeNumber(value.nowcast_forecast.remaining_under)
+          && isNonNegativeNumber(value.nowcast_forecast.remaining_gross)
+          && Math.abs(value.nowcast_forecast.remaining_pl + value.nowcast_forecast.remaining_under - value.nowcast_forecast.remaining_gross) > 0.001) {
+        errors.push("nowcast_forecast: remaining_pl + remaining_under jest niespójne z remaining_gross");
       }
       if (typeof value.nowcast_forecast.guardrail_applied !== "boolean") {
         errors.push("nowcast_forecast.guardrail_applied: oczekiwano boolean");
@@ -212,8 +222,18 @@ export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: str
     if (!isRecord(value.real_inflow_to_now)) {
       errors.push("real_inflow_to_now: brak danych");
     } else {
-      for (const key of ["measured_slots", "eligible_actual", "all_actual", "pl_actual", "under_actual"] as const) {
+      for (const key of ["measured_slots", "eligible_actual", "all_actual", "pl_actual", "under_actual", "gross_pl_actual", "gross_under_actual"] as const) {
         if (!isNonNegativeNumber(value.real_inflow_to_now[key])) errors.push(`real_inflow_to_now.${key}: oczekiwano liczby nieujemnej`);
+      }
+      if (isNonNegativeNumber(value.real_inflow_to_now.pl_actual) && isNonNegativeNumber(value.real_inflow_to_now.under_actual)
+          && isNonNegativeNumber(value.real_inflow_to_now.eligible_actual)
+          && Math.abs(value.real_inflow_to_now.pl_actual + value.real_inflow_to_now.under_actual - value.real_inflow_to_now.eligible_actual) > 0.001) {
+        errors.push("real_inflow_to_now: pl_actual + under_actual jest niespójne z eligible_actual");
+      }
+      if (isNonNegativeNumber(value.real_inflow_to_now.gross_pl_actual) && isNonNegativeNumber(value.real_inflow_to_now.gross_under_actual)
+          && isNonNegativeNumber(value.real_inflow_to_now.all_actual)
+          && Math.abs(value.real_inflow_to_now.gross_pl_actual + value.real_inflow_to_now.gross_under_actual - value.real_inflow_to_now.all_actual) > 0.001) {
+        errors.push("real_inflow_to_now: gross_pl_actual + gross_under_actual jest niespójne z all_actual");
       }
       if (value.real_inflow_to_now.variance_to_baseline_gross !== null
           && (typeof value.real_inflow_to_now.variance_to_baseline_gross !== "number"
@@ -225,8 +245,13 @@ export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: str
     if (!isRecord(value.remaining_forecast)) {
       errors.push("remaining_forecast: brak danych");
     } else {
-      for (const key of ["eligible_today", "after_cutoff", "gross_total"] as const) {
+      for (const key of ["pl", "under", "eligible_today", "after_cutoff", "gross_total"] as const) {
         if (!isNonNegativeNumber(value.remaining_forecast[key])) errors.push(`remaining_forecast.${key}: oczekiwano liczby nieujemnej`);
+      }
+      if (isNonNegativeNumber(value.remaining_forecast.pl) && isNonNegativeNumber(value.remaining_forecast.under)
+          && isNonNegativeNumber(value.remaining_forecast.gross_total)
+          && Math.abs(value.remaining_forecast.pl + value.remaining_forecast.under - value.remaining_forecast.gross_total) > 0.001) {
+        errors.push("remaining_forecast: pl + under jest niespójne z gross_total");
       }
     }
 
@@ -242,20 +267,45 @@ export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: str
         if (!isRecord(slot.baseline)) {
           errors.push(`slots[${index}].baseline: brak danych`);
         } else {
-          for (const key of ["total", "eligible_today", "after_cutoff"] as const) {
+          for (const key of ["pl", "under", "total", "eligible_today", "after_cutoff"] as const) {
             if (!isNonNegativeNumber(slot.baseline[key])) errors.push(`slots[${index}].baseline.${key}: oczekiwano liczby nieujemnej`);
+          }
+          if (isNonNegativeNumber(slot.baseline.pl) && isNonNegativeNumber(slot.baseline.under) && isNonNegativeNumber(slot.baseline.total)
+              && Math.abs(slot.baseline.pl + slot.baseline.under - slot.baseline.total) > 0.001) {
+            errors.push(`slots[${index}].baseline: pl + under jest niespójne z total`);
           }
         }
         if (!isRecord(slot.nowcast)) {
           errors.push(`slots[${index}].nowcast: brak danych`);
         } else {
-          for (const key of ["total", "eligible_today", "after_cutoff"] as const) {
+          for (const key of ["pl", "under", "total", "eligible_today", "after_cutoff"] as const) {
             if (!isNonNegativeNumber(slot.nowcast[key])) errors.push(`slots[${index}].nowcast.${key}: oczekiwano liczby nieujemnej`);
+          }
+          if (isNonNegativeNumber(slot.nowcast.pl) && isNonNegativeNumber(slot.nowcast.under) && isNonNegativeNumber(slot.nowcast.total)
+              && Math.abs(slot.nowcast.pl + slot.nowcast.under - slot.nowcast.total) > 0.001) {
+            errors.push(`slots[${index}].nowcast: pl + under jest niespójne z total`);
           }
           if (!Array.isArray(slot.nowcast.by_carrier)) errors.push(`slots[${index}].nowcast.by_carrier: oczekiwano tablicy`);
         }
         if (slot.variance_to_forecast !== null && (typeof slot.variance_to_forecast !== "number" || !Number.isFinite(slot.variance_to_forecast))) {
           errors.push(`slots[${index}].variance_to_forecast: oczekiwano liczby albo null`);
+        }
+        if (slot.actual !== null && slot.actual !== undefined) {
+          if (!isRecord(slot.actual)) {
+            errors.push(`slots[${index}].actual: nieprawidłowy rekord`);
+          } else {
+            for (const key of ["pl", "under", "gross_pl", "gross_under", "eligible_total", "all_orders", "sr_total", "bl_total", "rejected_allegro_one", "rejected_other_after12"] as const) {
+              if (!isNonNegativeNumber(slot.actual[key])) errors.push(`slots[${index}].actual.${key}: oczekiwano liczby nieujemnej`);
+            }
+            if (isNonNegativeNumber(slot.actual.pl) && isNonNegativeNumber(slot.actual.under) && isNonNegativeNumber(slot.actual.eligible_total)
+                && Math.abs(slot.actual.pl + slot.actual.under - slot.actual.eligible_total) > 0.001) {
+              errors.push(`slots[${index}].actual: pl + under jest niespójne z eligible_total`);
+            }
+            if (isNonNegativeNumber(slot.actual.gross_pl) && isNonNegativeNumber(slot.actual.gross_under) && isNonNegativeNumber(slot.actual.all_orders)
+                && Math.abs(slot.actual.gross_pl + slot.actual.gross_under - slot.actual.all_orders) > 0.001) {
+              errors.push(`slots[${index}].actual: gross_pl + gross_under jest niespójne z all_orders`);
+            }
+          }
         }
       });
     }

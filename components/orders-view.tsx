@@ -46,15 +46,35 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
       {demand.warnings.length > 0 && <div className="demand-warning" role="status">{demand.warnings.join(" · ")}</div>}
 
       <div className="orders-summary demand-summary">
-        {correctedMode ? (
+        {v3 ? (
+          <>
+            <DemandCard
+              label=".PL · nowcast nowych 06–16"
+              value={demand.nowcast_forecast.final_pl}
+              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_pl)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.gross_pl_actual)} · zostało ${formatNumber(demand.remaining_forecast.pl)}`}
+            />
+            <DemandCard
+              label="_PL · nowcast nowych 06–16"
+              value={demand.nowcast_forecast.final_under}
+              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_under)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.gross_under_actual)} · zostało ${formatNumber(demand.remaining_forecast.under)}`}
+            />
+            <DemandCard
+              label="Realny spływ do teraz"
+              value={demand.real_inflow_to_now.all_actual}
+              detail={`.PL ${formatNumber(demand.real_inflow_to_now.gross_pl_actual)} · _PL ${formatNumber(demand.real_inflow_to_now.gross_under_actual)}`}
+            />
+            <DemandCard
+              label="Aktualny target dnia"
+              value={demand.corrected_required_today}
+              detail={`bazowo ${formatMaybe(demand.required_today_baseline)} · korekta ${formatSignedNullable(demand.correction_vs_plan)}`}
+              accent
+            />
+          </>
+        ) : v2 ? (
           <>
             <DemandCard label="Pula rano · 06:00" value={morning?.total} detail={morning ? `.PL ${formatNumber(morning.pl)} · _PL ${formatNumber(morning.under)}` : "Brak kompletnego snapshotu"} />
             <DemandCard label="Realny spływ do teraz" value={demand.real_inflow_to_now.eligible_actual} detail={`wpłynęło ${formatNumber(demand.real_inflow_to_now.all_actual)} · do realizacji dzisiaj`} />
-            <DemandCard
-              label={v3 ? "Prognoza pozostałego spływu" : "Pozostała prognoza"}
-              value={demand.remaining_forecast.eligible_today}
-              detail={`${liveLastSlot || "teraz"}–16:00 · kwalifikowane dziś`}
-            />
+            <DemandCard label="Pozostała prognoza" value={demand.remaining_forecast.eligible_today} detail={`${liveLastSlot || "teraz"}–16:00 · kwalifikowane dziś`} />
             <DemandCard
               label="Aktualny target dnia"
               value={demand.corrected_required_today}
@@ -90,13 +110,21 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
               <table>
                 <thead>
                   {v3 ? (
-                    <tr>
-                      <th>Przedział</th>
-                      <th>Baseline</th>
-                      <th>Realnie</th>
-                      <th>Nowcast</th>
-                      <th>Do realizacji</th>
-                    </tr>
+                    <>
+                      <tr>
+                        <th rowSpan={2}>Przedział</th>
+                        <th colSpan={2}>.PL</th>
+                        <th colSpan={2}>_PL</th>
+                        <th rowSpan={2}>Razem</th>
+                        <th rowSpan={2}>Do realizacji</th>
+                      </tr>
+                      <tr>
+                        <th>Baseline</th>
+                        <th>Real / nowcast</th>
+                        <th>Baseline</th>
+                        <th>Real / nowcast</th>
+                      </tr>
+                    </>
                   ) : v2 ? (
                     <tr>
                       <th>Przedział</th>
@@ -119,19 +147,21 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                   {demand.slots.map(slot => {
                     if (v3) {
                       const nowcast = slot as V3ForecastSlot;
+                      const isActual = nowcast.effective_source === "actual" && Boolean(nowcast.actual);
                       return (
                         <tr key={slot.slot_start}>
                           <td>{slot.slot_start}–{slot.slot_end}</td>
-                          <td>{formatNumber(nowcast.baseline.eligible_today)}<small className="after-cutoff"> baseline</small></td>
+                          <td>{formatNumber(nowcast.baseline.pl)}</td>
                           <td>
-                            {nowcast.actual
-                              ? <>{formatNumber(nowcast.actual.eligible_total)}<small className="after-cutoff"> wpłynęło {formatNumber(nowcast.actual.all_orders)}</small></>
-                              : "—"}
+                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.gross_pl : nowcast.nowcast.pl)}</span>
+                            <small className="after-cutoff">{isActual ? " realnie" : " nowcast"}</small>
                           </td>
+                          <td>{formatNumber(nowcast.baseline.under)}</td>
                           <td>
-                            <span className="eligible-number">{formatNumber(nowcast.nowcast.eligible_today)}</span>
-                            <small className="after-cutoff">{nowcast.effective_source === "actual" ? " realnie" : " nowcast"}</small>
+                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.gross_under : nowcast.nowcast.under)}</span>
+                            <small className="after-cutoff">{isActual ? " realnie" : " nowcast"}</small>
                           </td>
+                          <td>{formatNumber(nowcast.nowcast.total)}</td>
                           <td><span className="eligible-number">{formatNumber(nowcast.effective_today)}</span></td>
                         </tr>
                       );
@@ -173,22 +203,28 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                     <>
                       <tr>
                         <td>Zakończone sloty do {liveLastSlot || "teraz"}</td>
-                        <td>{formatNumber(sumMeasuredBaselineEligible(demand))}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
+                        <td>{formatNumber(sumMeasuredBaselineBucket(demand, "pl"))}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.gross_pl_actual)}</td>
+                        <td>{formatNumber(sumMeasuredBaselineBucket(demand, "under"))}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.gross_under_actual)}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.all_actual)}</td>
                         <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
                       </tr>
                       <tr>
                         <td>Pozostało {liveLastSlot || "teraz"}–16:00</td>
-                        <td>{formatNumber(sumFutureBaselineEligible(demand))}</td>
-                        <td>—</td>
-                        <td>{formatNumber(demand.remaining_forecast.eligible_today)}</td>
+                        <td>{formatNumber(sumFutureBaselineBucket(demand, "pl"))}</td>
+                        <td>{formatNumber(demand.remaining_forecast.pl)}</td>
+                        <td>{formatNumber(sumFutureBaselineBucket(demand, "under"))}</td>
+                        <td>{formatNumber(demand.remaining_forecast.under)}</td>
+                        <td>{formatNumber(demand.remaining_forecast.gross_total)}</td>
                         <td>{formatNumber(demand.remaining_forecast.eligible_today)}</td>
                       </tr>
                       <tr>
                         <td>Napływ 06:00–16:00</td>
-                        <td>{formatMaybe(demand.baseline_forecast?.total)}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.all_actual)}<small className="after-cutoff"> do teraz</small></td>
+                        <td>{formatMaybe(demand.nowcast_forecast.baseline_pl)}</td>
+                        <td>{formatMaybe(demand.nowcast_forecast.final_pl)}</td>
+                        <td>{formatMaybe(demand.nowcast_forecast.baseline_under)}</td>
+                        <td>{formatMaybe(demand.nowcast_forecast.final_under)}</td>
                         <td>{formatMaybe(demand.nowcast_forecast.final_gross)}</td>
                         <td>{formatNumber(demand.real_inflow_to_now.eligible_actual + demand.remaining_forecast.eligible_today)}</td>
                       </tr>
@@ -250,9 +286,15 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                   <span>{formatNumber(Math.abs(demand.correction_vs_plan ?? 0))}</span><i>=</i>
                   <strong>{formatMaybe(demand.corrected_required_today)}</strong>
                 </div>
+                {v3 && morning && (
+                  <div className="morning-breakdown">
+                    <div><span>Rano .PL</span><b>{formatNumber(morning.pl)}</b></div>
+                    <div><span>Rano _PL</span><b>{formatNumber(morning.under)}</b></div>
+                  </div>
+                )}
                 <div className="morning-source">
                   {v3
-                    ? `Nowcast dnia: ${formatMaybe(demand.nowcast_forecast.final_gross)} · pewność ${Math.round(demand.nowcast_forecast.confidence * 100)}%`
+                    ? `Nowcast nowych 06–16: .PL ${formatMaybe(demand.nowcast_forecast.final_pl)} · _PL ${formatMaybe(demand.nowcast_forecast.final_under)} · razem ${formatMaybe(demand.nowcast_forecast.final_gross)} · pewność ${Math.round(demand.nowcast_forecast.confidence * 100)}%`
                     : `Realny spływ: ${demand.actual_as_of ? new Date(demand.actual_as_of).toLocaleString("pl-PL") : "—"}`}
                 </div>
               </>
@@ -297,12 +339,12 @@ function formatSignedNullable(value: number | null | undefined) {
   return typeof value === "number" ? formatSigned(value) : "—";
 }
 
-function sumMeasuredBaselineEligible(demand: DayDemandV3Snapshot) {
-  return demand.slots.reduce((sum, slot) => sum + (slot.actual ? slot.baseline.eligible_today : 0), 0);
+function sumMeasuredBaselineBucket(demand: DayDemandV3Snapshot, bucket: "pl" | "under") {
+  return demand.slots.reduce((sum, slot) => sum + (slot.actual ? slot.baseline[bucket] : 0), 0);
 }
 
-function sumFutureBaselineEligible(demand: DayDemandV3Snapshot) {
-  return demand.slots.reduce((sum, slot) => sum + (!slot.actual ? slot.baseline.eligible_today : 0), 0);
+function sumFutureBaselineBucket(demand: DayDemandV3Snapshot, bucket: "pl" | "under") {
+  return demand.slots.reduce((sum, slot) => sum + (!slot.actual ? slot.baseline[bucket] : 0), 0);
 }
 
 function varianceClass(value: number | null) {

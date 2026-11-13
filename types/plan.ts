@@ -124,7 +124,14 @@ export type DayDemandV2Snapshot = Omit<DayDemandSnapshot, "slots"> & {
   slots: CorrectedForecastSlot[];
 };
 
+export type V3ActualInflowSlot = ActualInflowSlot & {
+  gross_pl: number;
+  gross_under: number;
+};
+
 export type V3NowcastSlot = {
+  pl: number;
+  under: number;
   total: number;
   eligible_today: number;
   after_cutoff: number;
@@ -133,11 +140,13 @@ export type V3NowcastSlot = {
 
 export type V3ForecastSlot = ForecastSlot & {
   baseline: {
+    pl: number;
+    under: number;
     total: number;
     eligible_today: number;
     after_cutoff: number;
   };
-  actual: ActualInflowSlot | null;
+  actual: V3ActualInflowSlot | null;
   variance_to_forecast: number | null;
   nowcast: V3NowcastSlot;
   effective_today: number;
@@ -152,19 +161,29 @@ export type V3RealInflowSummary = {
   all_actual: number;
   pl_actual: number;
   under_actual: number;
+  gross_pl_actual: number;
+  gross_under_actual: number;
   variance_to_baseline_gross: number | null;
 };
 
 export type V3RemainingForecastSummary = {
+  pl: number;
+  under: number;
   eligible_today: number;
   after_cutoff: number;
   gross_total: number;
 };
 
 export type V3NowcastSummary = {
+  baseline_pl: number | null;
+  baseline_under: number | null;
   baseline_gross: number | null;
   projected_final_from_pace: number | null;
+  final_pl: number | null;
+  final_under: number | null;
   final_gross: number | null;
+  remaining_pl: number;
+  remaining_under: number;
   remaining_gross: number;
   confidence: number;
   guardrail_applied: boolean;
