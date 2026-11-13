@@ -206,6 +206,7 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .orders-table-card .section-heading { gap: 15px; }
 .orders-flow-wrap { max-height: 630px; overflow: auto; }
 .orders-flow-wrap table { min-width: 760px; font-size: 11px; }
+.orders-flow-wrap table.orders-v3-table { min-width: 1080px; }
 .orders-flow-wrap thead { position: sticky; top: 0; z-index: 2; }
 .orders-flow-wrap thead tr:first-child th { background: #f1e5eb; color: var(--ink); text-align: center; }
 .orders-flow-wrap thead tr:nth-child(2) th { background: #faf7f9; text-align: right; }
@@ -214,6 +215,14 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .orders-flow-wrap tbody tr.current-slot { background: #fff7e6; }
 .orders-flow-wrap tbody td:nth-child(2), .orders-flow-wrap tbody td:nth-child(3), .orders-flow-wrap tbody td:nth-child(4) { background: #fcf8fa; }
 .orders-flow-wrap tbody td:nth-child(5), .orders-flow-wrap tbody td:nth-child(6), .orders-flow-wrap tbody td:nth-child(7) { color: #315d46; }
+.orders-v3-table tbody td:nth-child(2),
+.orders-v3-table tbody td:nth-child(3),
+.orders-v3-table tbody td:nth-child(6) { background: #fcf8fa; color: var(--ink); }
+.orders-v3-table tbody td:nth-child(4),
+.orders-v3-table tbody td:nth-child(5),
+.orders-v3-table tbody td:nth-child(7) { background: #f7fbf8; color: #315d46; }
+.orders-v3-table td.inflow-diff-positive { color: var(--red-dark); font-weight: 800; }
+.orders-v3-table td.inflow-diff-negative { color: var(--good); font-weight: 800; }
 .orders-flow-wrap td.variance-positive { color: #30704a; font-weight: 700; }
 .orders-flow-wrap td.variance-negative { color: #a56b0a; font-weight: 700; }
 .orders-table-note { display: flex; flex-wrap: wrap; gap: 15px; padding: 10px 14px; border-top: 1px solid var(--line); color: #838592; font-size: 10px; }
