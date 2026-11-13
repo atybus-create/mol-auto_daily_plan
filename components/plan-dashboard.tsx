@@ -25,6 +25,38 @@ function defaultGroup(key: string) {
   return leaderKeys.has(key) ? "Lider / Specjalista" : receivingKeys.has(key) ? "Przyjęcia" : "Wydanie";
 }
 
+function buildWorkTarget(demand: OrdersDemandSnapshot | null) {
+  if (!demand) return { plan: null as number | null, current: null as number | null, difference: null as number | null };
+
+  if ("contract_version" in demand && demand.contract_version === 3) {
+    const morning = demand.morning?.total ?? null;
+    if (morning === null) return { plan: null, current: null, difference: null };
+
+    const plan = morning + demand.slots.reduce((sum, slot) => sum + slot.baseline.eligible_today, 0);
+    const current = morning + demand.slots.reduce(
+      (sum, slot) => sum + (slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today),
+      0,
+    );
+    return { plan, current, difference: current - plan };
+  }
+
+  if ("contract_version" in demand && demand.contract_version === 2) {
+    const plan = demand.required_today_baseline;
+    const current = demand.corrected_required_today;
+    return {
+      plan,
+      current,
+      difference: typeof plan === "number" && typeof current === "number" ? current - plan : null,
+    };
+  }
+
+  return {
+    plan: demand.required_today,
+    current: demand.required_today,
+    difference: typeof demand.required_today === "number" ? 0 : null,
+  };
+}
+
 export function PlanDashboard() {
   const [activeTab, setActiveTab] = useState<AppTab>("work");
   const [date, setDate] = useState(() => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit" }));
@@ -238,7 +270,8 @@ export function PlanDashboard() {
   }, [date, reload]);
 
   const currentGeneratedPlan = generatedPlan?.business_date === date ? generatedPlan : null;
-  const targetOrders = demand?.required_today ?? null;
+  const workTarget = buildWorkTarget(demand);
+  const targetOrders = workTarget.current;
   const pickFactor = norms.pick_per_hour * norms.pick_seconds / 3600;
   const livePickRemaining = targetOrders !== null && execution?.latest
     ? Math.max(0, targetOrders * pickFactor - execution.latest.pick_completed)
@@ -423,7 +456,7 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} demand={demand} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={Boolean(currentGeneratedPlan) && !planLoading}
+          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} targetPlan={workTarget.plan} targetCurrent={workTarget.current} targetDifference={workTarget.difference} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={Boolean(currentGeneratedPlan) && !planLoading}
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={(employeeId, blockIndex) => openManualCorrection(employeeId, blockIndex)}/>
         )}
