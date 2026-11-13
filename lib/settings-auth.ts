@@ -9,17 +9,12 @@ type SettingsAccessPayload = {
   version: 1;
 };
 
-export type SettingsPinVerification = "current" | "legacy" | false;
-
-function sessionSecret() {
-  const value = process.env.MOL_SESSION_SECRET?.trim() ?? "";
-  if (value.length < 32) throw new Error("Brak bezpiecznej konfiguracji sesji");
-  return value;
-}
+export type SettingsPinVerification = "current" | false;
 
 function settingsSecret() {
   const value = process.env.MOL_SETTINGS_SECRET?.trim() ?? "";
-  return value.length >= 32 ? value : sessionSecret();
+  if (value.length < 32) throw new Error("Brak bezpiecznej konfiguracji ustawień");
+  return value;
 }
 
 function safeEqualHex(left: string, right: string) {
@@ -35,16 +30,12 @@ function safeEqualText(left: string, right: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function signWithSecret(payload: string, secret: string) {
-  return createHmac("sha256", secret).update("settings-access:" + payload).digest("base64url");
-}
-
 function sign(payload: string) {
-  return signWithSecret(payload, settingsSecret());
+  return createHmac("sha256", settingsSecret()).update("settings-access:" + payload).digest("base64url");
 }
 
-function pinDigestWithSecret(pin: string, secret: string) {
-  return createHmac("sha256", secret).update("settings-pin:" + pin).digest("hex");
+function pinDigest(pin: string) {
+  return createHmac("sha256", settingsSecret()).update("settings-pin:" + pin).digest("hex");
 }
 
 export function isValidSettingsPin(pin: string) {
@@ -52,22 +43,13 @@ export function isValidSettingsPin(pin: string) {
 }
 
 export function settingsPinDigest(pin: string) {
-  return pinDigestWithSecret(pin, settingsSecret());
+  return pinDigest(pin);
 }
 
 export function verifySettingsPinSource(pin: string, storedDigest?: string | null): SettingsPinVerification {
   if (!isValidSettingsPin(pin)) return false;
   if (!storedDigest || !/^[a-f0-9]{64}$/.test(storedDigest)) return false;
-
-  if (safeEqualHex(settingsPinDigest(pin), storedDigest)) return "current";
-
-  const currentSecret = settingsSecret();
-  const legacySecret = sessionSecret();
-  if (currentSecret !== legacySecret && safeEqualHex(pinDigestWithSecret(pin, legacySecret), storedDigest)) {
-    return "legacy";
-  }
-
-  return false;
+  return safeEqualHex(settingsPinDigest(pin), storedDigest) ? "current" : false;
 }
 
 export function verifySettingsPin(pin: string, storedDigest?: string | null) {
@@ -88,19 +70,7 @@ export function verifySettingsAccessToken(token?: string) {
   if (!token) return false;
   const [encoded, signature, ...rest] = token.split(".");
   if (!encoded || !signature || rest.length > 0) return false;
-
-  const currentExpected = sign(encoded);
-  let signatureValid = safeEqualText(signature, currentExpected);
-
-  if (!signatureValid) {
-    const currentSecret = settingsSecret();
-    const legacySecret = sessionSecret();
-    if (currentSecret !== legacySecret) {
-      signatureValid = safeEqualText(signature, signWithSecret(encoded, legacySecret));
-    }
-  }
-
-  if (!signatureValid) return false;
+  if (!safeEqualText(signature, sign(encoded))) return false;
 
   try {
     const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Partial<SettingsAccessPayload>;
