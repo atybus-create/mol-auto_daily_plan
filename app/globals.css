@@ -220,9 +220,15 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .orders-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, .75fr); align-items: start; gap: 12px; }
 .orders-table-card { overflow: hidden; }
 .orders-table-card .section-heading { gap: 15px; }
-.orders-flow-wrap { max-height: 630px; overflow: auto; }
-.orders-flow-wrap table { min-width: 760px; font-size: 11px; }
-.orders-flow-wrap table.orders-v3-table { min-width: 1080px; }
+.orders-flow-wrap { max-height: none; overflow: visible; }
+.orders-flow-wrap table { min-width: 0; font-size: 11px; }
+.orders-flow-wrap table.orders-v3-table { width: 100%; min-width: 0; table-layout: fixed; }
+.orders-v3-table th { padding: 7px 6px; white-space: normal; line-height: 1.25; }
+.orders-v3-table td { padding: 7px 6px; white-space: nowrap; }
+.orders-v3-table th:first-child,
+.orders-v3-table td:first-child { width: 88px; }
+.orders-v3-table th:last-child,
+.orders-v3-table td:last-child { width: 92px; }
 .orders-flow-wrap thead { position: sticky; top: 0; z-index: 2; }
 .orders-flow-wrap thead tr:first-child th { background: #f1e5eb; color: var(--ink); text-align: center; }
 .orders-flow-wrap thead tr:nth-child(2) th { background: #faf7f9; text-align: right; }
@@ -393,7 +399,8 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
   .orders-summary { gap: 7px; }
   .order-stat { min-height: 72px; padding: 10px; }
   .order-stat strong { font-size: 20px; }
-  .orders-flow-wrap { max-height: 480px; }
+  .orders-flow-wrap { max-height: 480px; overflow: auto; }
+  .orders-flow-wrap table.orders-v3-table { min-width: 860px; table-layout: auto; }
   .work-demand-strip-live { grid-template-columns:1fr; }
   .work-demand-strip-live > .work-target-card { grid-column:auto; }
   .work-target-breakdown { grid-template-columns:1fr; }
