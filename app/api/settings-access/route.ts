@@ -85,20 +85,6 @@ export async function POST(request: NextRequest) {
       return response({ ok: false, error: "Nieprawidłowy PIN." }, 401);
     }
 
-    if (verification === "legacy") {
-      const expectedVersion = Number(current.data.version);
-      if (Number.isSafeInteger(expectedVersion)) {
-        try {
-          await backend("saveSettingsPin", {
-            settings_pin_hash: settingsPinDigest(pin),
-            expected_version: expectedVersion,
-          });
-        } catch {
-          // Migration is best-effort. A valid PIN must still unlock settings.
-        }
-      }
-    }
-
     return setAccessCookie(response({ ok: true, unlocked: true }));
   } catch {
     return response({ ok: false, error: "Nie udało się sprawdzić PIN-u ustawień." }, 502);
