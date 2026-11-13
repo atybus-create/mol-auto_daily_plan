@@ -134,8 +134,11 @@ export async function POST(request: NextRequest) {
       return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowe dane korekty lub brak aktualnej wersji planu. Odśwież plan." } satisfies GeneratedPlanError, 400);
     }
 
-    if (!validDate(date) || !demand || demand.ok !== true || demand.business_date !== date || demand.status !== "ready") {
-      const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Plan można wygenerować tylko dla kompletnego DAY DEMAND." };
+    const validDemand = demand && demand.ok === true && demand.business_date === date && demand.status === "ready"
+      ? demand
+      : null;
+    if (!validDate(date) || (trigger === "MANUAL" && !validDemand)) {
+      const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Ręczna korekta wymaga kompletnego DAY DEMAND." };
       return respond(error, 400);
     }
 
@@ -144,14 +147,14 @@ export async function POST(request: NextRequest) {
       issued_at: Date.now(),
       payload: {
         date,
-        demand: {
+        demand: validDemand ? {
           ok: true,
-          business_date: demand.business_date,
-          status: demand.status,
-          corrected_required_today: "corrected_required_today" in demand ? demand.corrected_required_today : demand.required_today,
-          required_today: demand.required_today,
-          generated_at: demand.generated_at,
-        },
+          business_date: validDemand.business_date,
+          status: validDemand.status,
+          corrected_required_today: "corrected_required_today" in validDemand ? validDemand.corrected_required_today : validDemand.required_today,
+          required_today: validDemand.required_today,
+          generated_at: validDemand.generated_at,
+        } : null,
         trigger,
         trigger_ref: triggerRef,
         manual_overrides: manualOverrides,
@@ -166,7 +169,7 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ envelope, signature: signConfigEnvelope(envelope) }),
       cache: "no-store",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(90_000),
     });
 
     const text = await result.text();
