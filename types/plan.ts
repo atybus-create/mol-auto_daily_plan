@@ -124,7 +124,69 @@ export type DayDemandV2Snapshot = Omit<DayDemandSnapshot, "slots"> & {
   slots: CorrectedForecastSlot[];
 };
 
-export type OrdersDemandSnapshot = DayDemandSnapshot | DayDemandV2Snapshot;
+export type V3NowcastSlot = {
+  total: number;
+  eligible_today: number;
+  after_cutoff: number;
+  by_carrier: CourierForecast[];
+};
+
+export type V3ForecastSlot = ForecastSlot & {
+  baseline: {
+    total: number;
+    eligible_today: number;
+    after_cutoff: number;
+  };
+  actual: ActualInflowSlot | null;
+  variance_to_forecast: number | null;
+  nowcast: V3NowcastSlot;
+  effective_today: number;
+  effective_source: "actual" | "nowcast";
+  cumulative_effective_today: number | null;
+};
+
+export type V3RealInflowSummary = {
+  measured_slots: number;
+  last_slot_end: string | null;
+  eligible_actual: number;
+  all_actual: number;
+  pl_actual: number;
+  under_actual: number;
+  variance_to_baseline_gross: number | null;
+};
+
+export type V3RemainingForecastSummary = {
+  eligible_today: number;
+  after_cutoff: number;
+  gross_total: number;
+};
+
+export type V3NowcastSummary = {
+  baseline_gross: number | null;
+  projected_final_from_pace: number | null;
+  final_gross: number | null;
+  remaining_gross: number;
+  confidence: number;
+  guardrail_applied: boolean;
+};
+
+export type DayDemandV3Snapshot = Omit<DayDemandSnapshot, "slots" | "forecast_kind"> & {
+  contract_version: 3;
+  forecast_kind: "BASELINE_PLUS_LIVE_NOWCAST";
+  actual_as_of: string | null;
+  baseline_source_model: string | null;
+  baseline_forecast: ForecastTotals | null;
+  required_today_baseline: number | null;
+  corrected_required_today: number | null;
+  correction_vs_plan: number | null;
+  corrected_plan_gross_total: number | null;
+  nowcast_forecast: V3NowcastSummary;
+  real_inflow_to_now: V3RealInflowSummary;
+  remaining_forecast: V3RemainingForecastSummary;
+  slots: V3ForecastSlot[];
+};
+
+export type OrdersDemandSnapshot = DayDemandSnapshot | DayDemandV2Snapshot | DayDemandV3Snapshot;
 
 export type DayDemandError = {
   ok: false;
