@@ -51,17 +51,17 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
             <DemandCard
               label=".PL · nowcast nowych 06–16"
               value={demand.nowcast_forecast.final_pl}
-              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_pl)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.pl_actual)} · zostało ${formatNumber(demand.remaining_forecast.pl)}`}
+              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_pl)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.gross_pl_actual)} · zostało ${formatNumber(demand.remaining_forecast.pl)}`}
             />
             <DemandCard
               label="_PL · nowcast nowych 06–16"
               value={demand.nowcast_forecast.final_under}
-              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_under)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.under_actual)} · zostało ${formatNumber(demand.remaining_forecast.under)}`}
+              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_under)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.gross_under_actual)} · zostało ${formatNumber(demand.remaining_forecast.under)}`}
             />
             <DemandCard
               label="Realny spływ do teraz"
               value={demand.real_inflow_to_now.all_actual}
-              detail={`.PL ${formatNumber(demand.real_inflow_to_now.pl_actual)} · _PL ${formatNumber(demand.real_inflow_to_now.under_actual)}`}
+              detail={`.PL ${formatNumber(demand.real_inflow_to_now.gross_pl_actual)} · _PL ${formatNumber(demand.real_inflow_to_now.gross_under_actual)}`}
             />
             <DemandCard
               label="Aktualny target dnia"
@@ -153,12 +153,12 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                           <td>{slot.slot_start}–{slot.slot_end}</td>
                           <td>{formatNumber(nowcast.baseline.pl)}</td>
                           <td>
-                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.pl : nowcast.nowcast.pl)}</span>
+                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.gross_pl : nowcast.nowcast.pl)}</span>
                             <small className="after-cutoff">{isActual ? " realnie" : " nowcast"}</small>
                           </td>
                           <td>{formatNumber(nowcast.baseline.under)}</td>
                           <td>
-                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.under : nowcast.nowcast.under)}</span>
+                            <span className="eligible-number">{formatNumber(isActual ? nowcast.actual!.gross_under : nowcast.nowcast.under)}</span>
                             <small className="after-cutoff">{isActual ? " realnie" : " nowcast"}</small>
                           </td>
                           <td>{formatNumber(nowcast.nowcast.total)}</td>
@@ -204,9 +204,9 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
                       <tr>
                         <td>Zakończone sloty do {liveLastSlot || "teraz"}</td>
                         <td>{formatNumber(sumMeasuredBaselineBucket(demand, "pl"))}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.pl_actual)}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.gross_pl_actual)}</td>
                         <td>{formatNumber(sumMeasuredBaselineBucket(demand, "under"))}</td>
-                        <td>{formatNumber(demand.real_inflow_to_now.under_actual)}</td>
+                        <td>{formatNumber(demand.real_inflow_to_now.gross_under_actual)}</td>
                         <td>{formatNumber(demand.real_inflow_to_now.all_actual)}</td>
                         <td>{formatNumber(demand.real_inflow_to_now.eligible_actual)}</td>
                       </tr>
