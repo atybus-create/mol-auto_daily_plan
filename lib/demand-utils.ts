@@ -222,8 +222,18 @@ export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: str
     if (!isRecord(value.real_inflow_to_now)) {
       errors.push("real_inflow_to_now: brak danych");
     } else {
-      for (const key of ["measured_slots", "eligible_actual", "all_actual", "pl_actual", "under_actual"] as const) {
+      for (const key of ["measured_slots", "eligible_actual", "all_actual", "pl_actual", "under_actual", "gross_pl_actual", "gross_under_actual"] as const) {
         if (!isNonNegativeNumber(value.real_inflow_to_now[key])) errors.push(`real_inflow_to_now.${key}: oczekiwano liczby nieujemnej`);
+      }
+      if (isNonNegativeNumber(value.real_inflow_to_now.pl_actual) && isNonNegativeNumber(value.real_inflow_to_now.under_actual)
+          && isNonNegativeNumber(value.real_inflow_to_now.eligible_actual)
+          && Math.abs(value.real_inflow_to_now.pl_actual + value.real_inflow_to_now.under_actual - value.real_inflow_to_now.eligible_actual) > 0.001) {
+        errors.push("real_inflow_to_now: pl_actual + under_actual jest niespójne z eligible_actual");
+      }
+      if (isNonNegativeNumber(value.real_inflow_to_now.gross_pl_actual) && isNonNegativeNumber(value.real_inflow_to_now.gross_under_actual)
+          && isNonNegativeNumber(value.real_inflow_to_now.all_actual)
+          && Math.abs(value.real_inflow_to_now.gross_pl_actual + value.real_inflow_to_now.gross_under_actual - value.real_inflow_to_now.all_actual) > 0.001) {
+        errors.push("real_inflow_to_now: gross_pl_actual + gross_under_actual jest niespójne z all_actual");
       }
       if (value.real_inflow_to_now.variance_to_baseline_gross !== null
           && (typeof value.real_inflow_to_now.variance_to_baseline_gross !== "number"
@@ -284,12 +294,16 @@ export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: str
           if (!isRecord(slot.actual)) {
             errors.push(`slots[${index}].actual: nieprawidłowy rekord`);
           } else {
-            for (const key of ["pl", "under", "eligible_total", "all_orders", "sr_total", "bl_total", "rejected_allegro_one", "rejected_other_after12"] as const) {
+            for (const key of ["pl", "under", "gross_pl", "gross_under", "eligible_total", "all_orders", "sr_total", "bl_total", "rejected_allegro_one", "rejected_other_after12"] as const) {
               if (!isNonNegativeNumber(slot.actual[key])) errors.push(`slots[${index}].actual.${key}: oczekiwano liczby nieujemnej`);
             }
-            if (isNonNegativeNumber(slot.actual.pl) && isNonNegativeNumber(slot.actual.under) && isNonNegativeNumber(slot.actual.all_orders)
-                && Math.abs(slot.actual.pl + slot.actual.under - slot.actual.all_orders) > 0.001) {
-              errors.push(`slots[${index}].actual: pl + under jest niespójne z all_orders`);
+            if (isNonNegativeNumber(slot.actual.pl) && isNonNegativeNumber(slot.actual.under) && isNonNegativeNumber(slot.actual.eligible_total)
+                && Math.abs(slot.actual.pl + slot.actual.under - slot.actual.eligible_total) > 0.001) {
+              errors.push(`slots[${index}].actual: pl + under jest niespójne z eligible_total`);
+            }
+            if (isNonNegativeNumber(slot.actual.gross_pl) && isNonNegativeNumber(slot.actual.gross_under) && isNonNegativeNumber(slot.actual.all_orders)
+                && Math.abs(slot.actual.gross_pl + slot.actual.gross_under - slot.actual.all_orders) > 0.001) {
+              errors.push(`slots[${index}].actual: gross_pl + gross_under jest niespójne z all_orders`);
             }
           }
         }
