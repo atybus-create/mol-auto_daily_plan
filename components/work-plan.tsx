@@ -6,7 +6,7 @@ import {
   targetFor,
 } from "@/lib/plan-utils";
 import { buildOperatorPerformance, type OperatorMapping, type ProcessPerformance } from "@/lib/operator-performance";
-import type { Employee, EmployeeProfile, ExecutionSnapshotResponse, GeneratedPlanSummary, OrdersDemandSnapshot, ProcessKind, PlannerNorms } from "@/types/plan";
+import type { Employee, EmployeeProfile, ExecutionSnapshotResponse, GeneratedPlanSummary, ProcessKind, PlannerNorms } from "@/types/plan";
 
 type WorkPlanProps = {
   employees: Employee[];
@@ -14,7 +14,9 @@ type WorkPlanProps = {
   execution: ExecutionSnapshotResponse | null;
   norms: PlannerNorms;
   date: string;
-  demand: OrdersDemandSnapshot | null;
+  targetPlan: number | null;
+  targetCurrent: number | null;
+  targetDifference: number | null;
   pickRemaining: number | null;
   packRemaining: number | null;
   planSummary: GeneratedPlanSummary | null;
@@ -37,7 +39,9 @@ export function WorkPlan({
   execution,
   norms,
   date,
-  demand,
+  targetPlan,
+  targetCurrent,
+  targetDifference,
   pickRemaining,
   packRemaining,
   planSummary,
@@ -89,9 +93,12 @@ export function WorkPlan({
         </div>
       </section>
 
-      <section className="work-demand-strip" aria-label="Wolumen do zaplanowania">
-        <WorkDemand label="Pula 06:00" value={demand?.morning?.total} />
-        <WorkDemand label="Target dnia" value={planSummary?.target_orders ?? demand?.required_today} accent />
+      <section className="work-demand-strip work-demand-strip-live" aria-label="Wolumen do zaplanowania">
+        <WorkTarget
+          plan={targetPlan}
+          current={targetCurrent}
+          difference={targetDifference}
+        />
         <WorkDemand label="PICK pozostało" value={pickRemaining} />
         <WorkDemand label="PAK pozostało" value={packRemaining} />
       </section>
@@ -317,8 +324,38 @@ export function WorkPlan({
   );
 }
 
+function WorkTarget({ plan, current, difference }: { plan: number | null; current: number | null; difference: number | null }) {
+  return (
+    <div className="work-target-card accent">
+      <div className="work-target-head">
+        <span>Target dnia</span>
+        <strong>{typeof current === "number" ? formatNumber(current) : "—"}</strong>
+      </div>
+      <div className="work-target-breakdown">
+        <div><small>Plan</small><b>{typeof plan === "number" ? formatNumber(plan) : "—"}</b></div>
+        <div><small>Stan aktualny</small><b>{typeof current === "number" ? formatNumber(current) : "—"}</b></div>
+        <div>
+          <small>Różnica</small>
+          <b className={workTargetDifferenceClass(difference)}>
+            {typeof difference === "number" ? formatSigned(difference) : "—"}
+          </b>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkDemand({ label, value, accent = false }: { label: string; value: number | null | undefined; accent?: boolean }) {
   return <div className={accent ? "accent" : undefined}><span>{label}</span><strong>{typeof value === "number" ? formatNumber(value) : "—"}</strong></div>;
+}
+
+function formatSigned(value: number) {
+  return `${value > 0 ? "+" : ""}${formatNumber(value)}`;
+}
+
+function workTargetDifferenceClass(value: number | null) {
+  if (value === null || value === 0) return undefined;
+  return value > 0 ? "work-target-diff-positive" : "work-target-diff-negative";
 }
 
 function formatMaybe(value: number | null | undefined) {
