@@ -75,6 +75,15 @@ export function WorkPlan({
   const nextExecutionTimestamp = formatWarsawTimestamp(execution?.latest?.next_refresh_at ?? execution?.refresh?.next_refresh_at ?? null);
   const executionStatus = describeExecution(execution);
 
+  const pickDemandRbh = targetCurrent !== null
+    ? (targetCurrent * norms.pick_per_hour * norms.pick_seconds / 3600) / norms.pick_per_hour
+    : null;
+  const packDemandRbh = targetCurrent !== null
+    ? targetCurrent / norms.pack_per_hour
+    : null;
+  const pickScheduledRbh = planSummary?.planned_pick_rbh ?? null;
+  const packScheduledRbh = planSummary?.planned_pack_rbh ?? null;
+
   return (
     <section id="work-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-work">
       <section className="page-intro">
@@ -101,6 +110,19 @@ export function WorkPlan({
         />
         <WorkDemand label="PICK pozostało" value={pickRemaining} />
         <WorkDemand label="PAK pozostało" value={packRemaining} />
+      </section>
+
+      <section className="rbh-demand-grid" aria-label="Zapotrzebowanie i rozpisanie RBH">
+        <RbhDemandCard
+          process="PICK"
+          demand={pickDemandRbh}
+          scheduled={pickScheduledRbh}
+        />
+        <RbhDemandCard
+          process="PAK"
+          demand={packDemandRbh}
+          scheduled={packScheduledRbh}
+        />
       </section>
 
       <section className="legend" aria-label="Legenda czynności">
@@ -324,6 +346,34 @@ export function WorkPlan({
   );
 }
 
+function RbhDemandCard({ process, demand, scheduled }: { process: "PICK" | "PAK"; demand: number | null; scheduled: number | null }) {
+  const balance = demand !== null && scheduled !== null ? scheduled - demand : null;
+  const covered = balance !== null && balance >= 0;
+
+  return (
+    <section className={`rbh-demand-card ${process.toLowerCase()}`}>
+      <div className="rbh-demand-title">
+        <span>{process}</span>
+        <b>Zapotrzebowanie RBH</b>
+      </div>
+      <div className="rbh-demand-values">
+        <div>
+          <small>Zapotrzebowanie</small>
+          <strong>{formatRbh(demand)}</strong>
+        </div>
+        <div>
+          <small>Rozpisane</small>
+          <strong>{formatRbh(scheduled)}</strong>
+        </div>
+        <div className={balance === null ? undefined : covered ? "rbh-balance-covered" : "rbh-balance-shortage"}>
+          <small>Bilans</small>
+          <strong>{formatRbhSigned(balance)}</strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function WorkTarget({ plan, current, difference }: { plan: number | null; current: number | null; difference: number | null }) {
   return (
     <div className="work-target-card accent">
@@ -347,6 +397,19 @@ function WorkTarget({ plan, current, difference }: { plan: number | null; curren
 
 function WorkDemand({ label, value, accent = false }: { label: string; value: number | null | undefined; accent?: boolean }) {
   return <div className={accent ? "accent" : undefined}><span>{label}</span><strong>{typeof value === "number" ? formatNumber(value) : "—"}</strong></div>;
+}
+
+function formatRbh(value: number | null | undefined) {
+  return typeof value === "number"
+    ? `${value.toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} RBH`
+    : "—";
+}
+
+function formatRbhSigned(value: number | null | undefined) {
+  if (typeof value !== "number") return "—";
+  const normalized = Math.abs(value) < 0.05 ? 0 : value;
+  const prefix = normalized > 0 ? "+" : "";
+  return `${prefix}${normalized.toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} RBH`;
 }
 
 function formatSigned(value: number) {
