@@ -28,6 +28,7 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
   const { morning, forecast, plan_gross: gross } = demand;
   const liveLastSlot = correctedMode ? demand.real_inflow_to_now.last_slot_end : null;
   const statusLabel = demand.status === "ready" ? "Gotowy" : demand.status === "stale" ? "Dane nieaktualne" : "Plan częściowy";
+  const v3Summary = v3 ? buildV3Summary(demand) : null;
 
   return (
     <section id="orders-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-orders">
@@ -46,30 +47,53 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
       {demand.warnings.length > 0 && <div className="demand-warning" role="status">{demand.warnings.join(" · ")}</div>}
 
       <div className="orders-summary demand-summary">
-        {v3 ? (
-          <>
-            <DemandCard
-              label=".PL · nowcast nowych 06–16"
-              value={demand.nowcast_forecast.final_pl}
-              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_pl)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.gross_pl_actual)} · zostało ${formatNumber(demand.remaining_forecast.pl)}`}
-            />
-            <DemandCard
-              label="_PL · nowcast nowych 06–16"
-              value={demand.nowcast_forecast.final_under}
-              detail={`baseline ${formatMaybe(demand.nowcast_forecast.baseline_under)} · wpłynęło ${formatNumber(demand.real_inflow_to_now.gross_under_actual)} · zostało ${formatNumber(demand.remaining_forecast.under)}`}
-            />
-            <DemandCard
-              label="Realny spływ do teraz"
-              value={demand.real_inflow_to_now.all_actual}
-              detail={`.PL ${formatNumber(demand.real_inflow_to_now.gross_pl_actual)} · _PL ${formatNumber(demand.real_inflow_to_now.gross_under_actual)}`}
-            />
-            <DemandCard
-              label="Aktualny target dnia"
-              value={demand.corrected_required_today}
-              detail={`bazowo ${formatMaybe(demand.required_today_baseline)} · korekta ${formatSignedNullable(demand.correction_vs_plan)}`}
-              accent
-            />
-          </>
+        {v3 && v3Summary ? (
+          <div className="orders-summary-v3">
+            <section className="order-stat summary-0600">
+              <span>Ilość zamówień na 06:00</span>
+              <strong>{formatMaybe(morning?.total)}</strong>
+              <small>{morning ? `.PL ${formatNumber(morning.pl)} · _PL ${formatNumber(morning.under)}` : "Brak kompletnego snapshotu"}</small>
+            </section>
+
+            <section className="order-stat summary-flow">
+              <span>Spływ 06:00–16:00</span>
+              <div className="summary-metrics">
+                <SummaryMetric label="Plan spływu" value={v3Summary.planInflowTotal} />
+                <SummaryMetric label="Skorygowany plan spływu" value={v3Summary.correctedInflowTotal} />
+                <SummaryMetric
+                  label="Różnica"
+                  value={v3Summary.inflowDifference}
+                  signed
+                  className={inflowDifferenceClass(v3Summary.inflowDifference)}
+                />
+              </div>
+              <small>Skorygowany = realny spływ w zakończonych slotach + plan w slotach przyszłych.</small>
+            </section>
+
+            <section className="order-stat summary-day">
+              <span>Cały dzień · stan 06:00 + spływ</span>
+              <div className="summary-metrics">
+                <SummaryMetric label="Plan na 06:00" value={v3Summary.planDayTotal} />
+                <SummaryMetric label="Skorygowany teraz" value={v3Summary.correctedDayTotal} />
+                <SummaryMetric
+                  label="Różnica"
+                  value={v3Summary.dayDifference}
+                  signed
+                  className={inflowDifferenceClass(v3Summary.dayDifference)}
+                />
+              </div>
+              <div className="summary-buckets">
+                <div>
+                  <b>Plan 06:00</b>
+                  <span>.PL {formatMaybe(v3Summary.planDayPl)} · _PL {formatMaybe(v3Summary.planDayUnder)}</span>
+                </div>
+                <div>
+                  <b>Skorygowany</b>
+                  <span>.PL {formatMaybe(v3Summary.correctedDayPl)} · _PL {formatMaybe(v3Summary.correctedDayUnder)}</span>
+                </div>
+              </div>
+            </section>
+          </div>
         ) : v2 ? (
           <>
             <DemandCard label="Pula rano · 06:00" value={morning?.total} detail={morning ? `.PL ${formatNumber(morning.pl)} · _PL ${formatNumber(morning.under)}` : "Brak kompletnego snapshotu"} />
@@ -308,6 +332,45 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
       </div>
     </section>
   );
+}
+
+function SummaryMetric({ label, value, signed = false, className }: { label: string; value: number | null | undefined; signed?: boolean; className?: string }) {
+  return (
+    <div className="summary-metric">
+      <small>{label}</small>
+      <strong className={className}>{typeof value === "number" ? (signed ? formatSigned(value) : formatNumber(value)) : "—"}</strong>
+    </div>
+  );
+}
+
+function buildV3Summary(demand: DayDemandV3Snapshot) {
+  const planInflowPl = demand.slots.reduce((sum, slot) => sum + slot.baseline.pl, 0);
+  const planInflowUnder = demand.slots.reduce((sum, slot) => sum + slot.baseline.under, 0);
+  const correctedInflowPl = demand.slots.reduce(
+    (sum, slot) => sum + (slot.actual ? slot.actual.gross_pl : slot.baseline.pl),
+    0,
+  );
+  const correctedInflowUnder = demand.slots.reduce(
+    (sum, slot) => sum + (slot.actual ? slot.actual.gross_under : slot.baseline.under),
+    0,
+  );
+  const planInflowTotal = planInflowPl + planInflowUnder;
+  const correctedInflowTotal = correctedInflowPl + correctedInflowUnder;
+  const inflowDifference = correctedInflowTotal - planInflowTotal;
+  const morning = demand.morning;
+
+  return {
+    planInflowTotal,
+    correctedInflowTotal,
+    inflowDifference,
+    planDayTotal: morning ? morning.total + planInflowTotal : null,
+    correctedDayTotal: morning ? morning.total + correctedInflowTotal : null,
+    dayDifference: morning ? inflowDifference : null,
+    planDayPl: morning ? morning.pl + planInflowPl : null,
+    planDayUnder: morning ? morning.under + planInflowUnder : null,
+    correctedDayPl: morning ? morning.pl + correctedInflowPl : null,
+    correctedDayUnder: morning ? morning.under + correctedInflowUnder : null,
+  };
 }
 
 function DemandCard({ label, value, detail, accent = false }: { label: string; value: number | null | undefined; detail: string; accent?: boolean }) {
