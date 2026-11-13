@@ -293,24 +293,40 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
 
         <aside className="orders-side">
           <section className="card morning-card">
-            <div className="section-heading"><div><p className="eyebrow">AKTUALNY PLAN</p><h2>{correctedMode ? "Korekta dnia" : "Rano + prognoza"}</h2></div></div>
-            {correctedMode ? (
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">AKTUALNY PLAN</p>
+                <h2>{v3 ? "Do realizacji dzisiaj po cutoffach" : correctedMode ? "Korekta dnia" : "Rano + prognoza"}</h2>
+              </div>
+            </div>
+            {v3 && v3Summary ? (
+              <>
+                <div className="demand-equation">
+                  <span>{formatMaybe(v3Summary.planEligibleDay)}</span>
+                  <i>{v3Summary.eligibleDifference >= 0 ? "+" : "−"}</i>
+                  <span className={inflowDifferenceClass(v3Summary.eligibleDifference)}>
+                    {formatNumber(Math.abs(v3Summary.eligibleDifference))}
+                  </span>
+                  <i>=</i>
+                  <strong>{formatMaybe(v3Summary.correctedEligibleDay)}</strong>
+                </div>
+                <div className="morning-breakdown">
+                  <div><span>Plan po cutoffach</span><b>{formatMaybe(v3Summary.planEligibleDay)}</b></div>
+                  <div><span>Skorygowany po cutoffach</span><b>{formatMaybe(v3Summary.correctedEligibleDay)}</b></div>
+                </div>
+                <div className="morning-source">
+                  Skorygowany wolumen brutto {formatMaybe(v3Summary.correctedDayTotal)} · na kolejny dzień po cutoffach {formatMaybe(v3Summary.correctedAfterCutoff)}.
+                </div>
+              </>
+            ) : correctedMode ? (
               <>
                 <div className="demand-equation">
                   <span>{formatMaybe(demand.required_today_baseline)}</span><i>{(demand.correction_vs_plan ?? 0) >= 0 ? "+" : "−"}</i>
                   <span>{formatNumber(Math.abs(demand.correction_vs_plan ?? 0))}</span><i>=</i>
                   <strong>{formatMaybe(demand.corrected_required_today)}</strong>
                 </div>
-                {v3 && morning && (
-                  <div className="morning-breakdown">
-                    <div><span>Rano .PL</span><b>{formatNumber(morning.pl)}</b></div>
-                    <div><span>Rano _PL</span><b>{formatNumber(morning.under)}</b></div>
-                  </div>
-                )}
                 <div className="morning-source">
-                  {v3
-                    ? `Nowcast nowych 06–16: .PL ${formatMaybe(demand.nowcast_forecast.final_pl)} · _PL ${formatMaybe(demand.nowcast_forecast.final_under)} · razem ${formatMaybe(demand.nowcast_forecast.final_gross)} · pewność ${Math.round(demand.nowcast_forecast.confidence * 100)}%`
-                    : `Realny spływ: ${demand.actual_as_of ? new Date(demand.actual_as_of).toLocaleString("pl-PL") : "—"}`}
+                  Realny spływ: {demand.actual_as_of ? new Date(demand.actual_as_of).toLocaleString("pl-PL") : "—"}
                 </div>
               </>
             ) : (
@@ -370,6 +386,23 @@ function buildV3Summary(demand: DayDemandV3Snapshot) {
     planDayUnder: morning ? morning.under + planInflowUnder : null,
     correctedDayPl: morning ? morning.pl + correctedInflowPl : null,
     correctedDayUnder: morning ? morning.under + correctedInflowUnder : null,
+    planEligibleDay: morning ? morning.total + demand.slots.reduce((sum, slot) => sum + slot.baseline.eligible_today, 0) : null,
+    correctedEligibleDay: morning ? morning.total + demand.slots.reduce(
+      (sum, slot) => sum + (slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today),
+      0,
+    ) : null,
+    eligibleDifference: demand.slots.reduce(
+      (sum, slot) => sum + ((slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today) - slot.baseline.eligible_today),
+      0,
+    ),
+    correctedAfterCutoff: morning
+      ? (morning.total + correctedInflowTotal) - (
+          morning.total + demand.slots.reduce(
+            (sum, slot) => sum + (slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today),
+            0,
+          )
+        )
+      : null,
   };
 }
 
