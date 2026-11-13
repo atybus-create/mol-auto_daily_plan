@@ -38,7 +38,9 @@ export function normalizePlanningAutomationSettings(value: unknown): PlanningAut
 }
 
 export function validatePlanningAutomationSettings(value: PlanningAutomationSettings) {
-  if (!value.slots.every(slot => slotIds.includes(slot.id) && typeof slot.enabled === "boolean")) {
+  const ids = value.slots.map(slot => slot.id);
+  if (value.slots.length !== slotIds.length || new Set(ids).size !== slotIds.length ||
+      !value.slots.every(slot => slotIds.includes(slot.id) && typeof slot.enabled === "boolean")) {
     return "Nieprawidłowa konfiguracja automatycznych przeliczeń.";
   }
   return null;
