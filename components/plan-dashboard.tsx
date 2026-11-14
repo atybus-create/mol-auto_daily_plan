@@ -301,8 +301,27 @@ export function PlanDashboard() {
     }));
   }, [currentGeneratedPlan, employees, schedule]);
 
+  function currentVersion() {
+    if (!currentGeneratedPlan) return { expected_plan_id: null, expected_revision: 0 };
+    const revision = currentGeneratedPlan.revision?.version;
+    if (!Number.isSafeInteger(revision) || !revision || revision < 1) return null;
+    return { expected_plan_id: currentGeneratedPlan.plan_id, expected_revision: revision };
+  }
+
+  async function refreshPlanAfterConflict() {
+    latestPlanRequest.current += 1;
+    const requestId = latestPlanRequest.current;
+    try {
+      const response = await fetch(`/api/plan?date=${encodeURIComponent(date)}`, { cache: "no-store" });
+      const result = await response.json() as LatestGeneratedPlanResponse | GeneratedPlanError;
+      if (response.ok && result.ok && requestId === latestPlanRequest.current) setGeneratedPlan(result.plan);
+    } catch { /* Keep the conflict message visible; user can refresh manually. */ }
+  }
+
   async function generatePlan() {
-    if (planLoading || !demand || demand.status !== "ready") return;
+    if (planLoading) return;
+    const version = currentVersion();
+    if (!version) { setToast("Brak numeru wersji planu. Odśwież plan przed przeliczeniem."); return; }
     latestPlanRequest.current += 1;
     setPlanLoading(true);
     setToast("");
@@ -310,13 +329,18 @@ export function PlanDashboard() {
       const response = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, demand, trigger: "BUTTON", trigger_ref: "ui_button" }),
+        body: JSON.stringify({ date, demand, trigger: "BUTTON", trigger_ref: "ui_button", ...version }),
       });
       const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
       if (!response.ok || !result.ok) {
+        if (response.status === 409) {
+          await refreshPlanAfterConflict();
+          throw new Error("Plan zmienił się podczas przeliczania. Wczytano najnowszą wersję. Spróbuj ponownie.");
+        }
         throw new Error(result.ok ? "Nie udało się wygenerować planu." : (result.message || result.error));
       }
       setGeneratedPlan(result);
+      setReload(x => x + 1);
       setActiveTab("work");
       const detail = result.status === "DRAFT_READY"
         ? "Plan roboczy wygenerowany."
@@ -343,6 +367,11 @@ export function PlanDashboard() {
 
   async function submitManualCorrection(override: PlanManualOverride, removeOverrideIds: string[] = []) {
     if (planLoading || !demand || demand.status !== "ready") return;
+    const version = currentVersion();
+    if (!version || !currentGeneratedPlan) {
+      setToast("Brak aktualnej wersji planu. Odśwież plan przed korektą.");
+      return;
+    }
     latestPlanRequest.current += 1;
     setPlanLoading(true);
     setToast("");
@@ -357,10 +386,16 @@ export function PlanDashboard() {
           trigger_ref: "ui_manual",
           manual_overrides: removeOverrideIds.length ? [] : [override],
           remove_override_ids: removeOverrideIds,
+          ...version,
         }),
       });
       const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
       if (!response.ok || !result.ok) {
+        if (response.status === 409) {
+          await refreshPlanAfterConflict();
+          setEditTarget(null);
+          throw new Error("Plan został zmieniony w międzyczasie. Wczytano aktualną wersję. Otwórz blok ponownie i ponów korektę.");
+        }
         throw new Error(result.ok ? "Nie udało się zapisać korekty." : (result.message || result.error));
       }
       setGeneratedPlan(result);
@@ -437,7 +472,7 @@ export function PlanDashboard() {
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
           <button className="button button-secondary" type="button" disabled={scheduleLoading || configLoading} onClick={refresh}>↻ Odśwież dane</button>
-          <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading || demandLoading || executionLoading || !demand || demand.status !== "ready"} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>
+          <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>
           <form action="/api/auth/logout" method="post" className="logout-form">
             <button className="button button-secondary logout-button" type="submit">Wyloguj</button>
           </form>

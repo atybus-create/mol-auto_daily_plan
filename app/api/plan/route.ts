@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { signConfigEnvelope, type SignedConfigEnvelope } from "@/lib/config-auth";
+import { isRecord, validOverrides, validPlanVersion, validRemoveIds } from "@/lib/plan-request-validation";
 import type { GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandSnapshot } from "@/types/plan";
 
 export const runtime = "nodejs";
@@ -14,6 +15,16 @@ function respond(data: unknown, status = 200) {
 
 function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+}
+
+
+function isPlanError(value: unknown): value is GeneratedPlanError {
+  return isRecord(value) && value.ok === false &&
+    typeof value.error === "string" &&
+    (value.message === undefined || typeof value.message === "string");
+}
+function invalidResponse(message: string) {
+  return respond({ ok: false, error: "invalid_backend_response", message } satisfies GeneratedPlanError, 502);
 }
 
 function isGeneratedPlan(value: unknown, date: string): value is GeneratedPlanResponse {
@@ -101,18 +112,33 @@ export async function POST(request: NextRequest) {
       trigger_ref?: unknown;
       manual_overrides?: unknown;
       remove_override_ids?: unknown;
+      expected_plan_id?: unknown;
+      expected_revision?: unknown;
     };
     const date = typeof body.date === "string" ? body.date : "";
     const demand = body.demand as OrdersDemandSnapshot | undefined;
     const trigger = body.trigger === "MANUAL" ? "MANUAL" : "BUTTON";
     const triggerRef = typeof body.trigger_ref === "string" ? body.trigger_ref.slice(0, 120) : "";
-    const manualOverrides = Array.isArray(body.manual_overrides) ? body.manual_overrides : [];
-    const removeOverrideIds = Array.isArray(body.remove_override_ids)
-      ? body.remove_override_ids.filter((value): value is string => typeof value === "string" && value.length > 0).slice(0, 100)
-      : [];
+    const manualOverrides = body.manual_overrides ?? [];
+    const removeOverrideIds = body.remove_override_ids ?? [];
+    const hasExpectedId = Object.prototype.hasOwnProperty.call(body, "expected_plan_id");
+    const hasExpectedRevision = Object.prototype.hasOwnProperty.call(body, "expected_revision");
+    const expectedPlanId = body.expected_plan_id;
+    const expectedRevision = body.expected_revision;
+    if (!validOverrides(manualOverrides) ||
+      !validRemoveIds(removeOverrideIds) ||
+      !hasExpectedId || !hasExpectedRevision ||
+      !validPlanVersion(expectedPlanId, expectedRevision) ||
+      (trigger === "MANUAL" && Array.isArray(manualOverrides) && manualOverrides.length === 0 && Array.isArray(removeOverrideIds) && removeOverrideIds.length === 0)
+    ) {
+      return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowe dane korekty lub brak aktualnej wersji planu. Odśwież plan." } satisfies GeneratedPlanError, 400);
+    }
 
-    if (!validDate(date) || !demand || demand.ok !== true || demand.business_date !== date || demand.status !== "ready") {
-      const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Plan można wygenerować tylko dla kompletnego DAY DEMAND." };
+    const validDemand = demand && demand.ok === true && demand.business_date === date && demand.status === "ready"
+      ? demand
+      : null;
+    if (!validDate(date) || (trigger === "MANUAL" && !validDemand)) {
+      const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Ręczna korekta wymaga kompletnego DAY DEMAND." };
       return respond(error, 400);
     }
 
@@ -121,18 +147,20 @@ export async function POST(request: NextRequest) {
       issued_at: Date.now(),
       payload: {
         date,
-        demand: {
+        demand: validDemand ? {
           ok: true,
-          business_date: demand.business_date,
-          status: demand.status,
-          corrected_required_today: "corrected_required_today" in demand ? demand.corrected_required_today : demand.required_today,
-          required_today: demand.required_today,
-          generated_at: demand.generated_at,
-        },
+          business_date: validDemand.business_date,
+          status: validDemand.status,
+          corrected_required_today: "corrected_required_today" in validDemand ? validDemand.corrected_required_today : validDemand.required_today,
+          required_today: validDemand.required_today,
+          generated_at: validDemand.generated_at,
+        } : null,
         trigger,
         trigger_ref: triggerRef,
         manual_overrides: manualOverrides,
         remove_override_ids: removeOverrideIds,
+        expected_plan_id: expectedPlanId,
+        expected_revision: expectedRevision,
       },
     };
 
@@ -141,18 +169,26 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ envelope, signature: signConfigEnvelope(envelope) }),
       cache: "no-store",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(90_000),
     });
 
     const text = await result.text();
-    let data: GeneratedPlanResponse | GeneratedPlanError;
+    let data: unknown;
     try {
-      data = JSON.parse(text) as GeneratedPlanResponse | GeneratedPlanError;
+      data = JSON.parse(text);
     } catch {
-      return respond({ ok: false, error: "invalid_backend_response", message: "Generator zwrócił nieprawidłową odpowiedź." } satisfies GeneratedPlanError, 502);
+      return invalidResponse("Generator zwrócił nieprawidłową odpowiedź.");
     }
-
-    return respond(data, result.ok && data.ok ? 200 : (result.ok ? 502 : result.status));
+    if (!result.ok) {
+      if (result.status >= 400 && result.status < 500 && isPlanError(data)) {
+        return respond(data, result.status);
+      }
+      return invalidResponse("Generator nie zwrócił poprawnego komunikatu błędu.");
+    }
+    if (!isGeneratedPlan(data, date)) {
+      return invalidResponse("Generator zwrócił niekompletny plan.");
+    }
+    return respond(data);
   } catch {
     return respond({ ok: false, error: "planner_unavailable", message: "Generator planu jest chwilowo niedostępny." } satisfies GeneratedPlanError, 502);
   }

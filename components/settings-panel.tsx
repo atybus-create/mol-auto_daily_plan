@@ -318,54 +318,36 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
             <div className="planning-automation-header">
               <div>
                 <h3>Automatyczne przeliczenia planu</h3>
-                <p>Ten harmonogram będzie używany przez scheduler n8n. Wszystkie przeliczenia korzystają z tego samego generatora co przycisk „Przelicz plan”.</p>
+                <p>Godziny są stałe. W tym miejscu można wyłącznie włączyć albo wyłączyć konkretne przeliczenie.</p>
               </div>
-              <label className="settings-check settings-active">
-                <input type="checkbox" checked={planningDraft.enabled} onChange={e=>setPlanningDraft({...planningDraft,enabled:e.target.checked})}/>
-                Automat aktywny
-              </label>
             </div>
 
             <div className="planning-slots">
               {([
-                ["initial", "Start dnia", "Pierwszy plan po potwierdzeniu gotowości danych"],
-                ["replan_1", "Korekta 1", "Przeliczenie pozostałej części dnia"],
-                ["replan_2", "Korekta 2", "Przeliczenie pozostałej części dnia"],
-                ["replan_3", "Korekta 3", "Ostatnie planowe przeliczenie dnia"],
-              ] as const).map(([id, label, hint]) => {
+                ["initial", "06:05", "Start dnia", "Pierwszy plan po przygotowaniu prognozy, grafiku i porannego snapshotu zamówień"],
+                ["replan_1", "08:05", "Korekta 1", "Świeży ES + korekta rzeczywistego napływu zamówień"],
+                ["replan_2", "12:05", "Korekta 2", "Świeży ES + korekta rzeczywistego napływu zamówień"],
+                ["replan_3", "16:05", "Korekta 3", "Świeży ES + korekta rzeczywistego napływu zamówień"],
+              ] as const).map(([id, time, label, hint]) => {
                 const slot = planningDraft.slots.find(item => item.id === id)!;
                 return (
                   <div className="planning-slot" key={id}>
                     <label className="settings-check">
                       <input type="checkbox" checked={slot.enabled} onChange={e=>updatePlanningSlot(id,{enabled:e.target.checked})}/>
-                      <span><b>{label}</b><small>{hint}</small></span>
+                      <span><b>{label} · {time}</b><small>{hint}</small></span>
                     </label>
-                    <input aria-label={`Godzina: ${label}`} type="time" step="300" value={slot.time} onChange={e=>updatePlanningSlot(id,{time:e.target.value})} disabled={!slot.enabled}/>
                   </div>
                 );
               })}
             </div>
 
-            <div className="settings-fields-pair planning-readiness">
-              <div className="settings-field">
-                <label htmlFor="planning-retry">Ponowienie przy braku danych</label>
-                <span className="settings-number"><input id="planning-retry" type="number" min="1" max="30" step="1" value={planningDraft.readiness_retry_minutes} onChange={e=>setPlanningDraft({...planningDraft,readiness_retry_minutes:Number(e.target.value)})}/><b>min</b></span>
-                <small>Scheduler nie tworzy planu na niekompletnych danych — ponawia próbę.</small>
-              </div>
-              <div className="settings-field">
-                <label htmlFor="planning-timeout">Maks. oczekiwanie na komplet danych</label>
-                <span className="settings-number"><input id="planning-timeout" type="number" min="5" max="120" step="5" value={planningDraft.readiness_timeout_minutes} onChange={e=>setPlanningDraft({...planningDraft,readiness_timeout_minutes:Number(e.target.value)})}/><b>min</b></span>
-                <small>Po tym czasie automat zapisze błąd gotowości zamiast tworzyć błędny plan.</small>
-              </div>
-            </div>
-
             <div className="settings-editor-footer">
-              <p>Domyślnie: 06:00 · 08:00 · 12:00 · 16:00. Godziny można zmieniać lub wyłączać pojedynczo.</p>
-              <button type="button" className="button button-primary" onClick={()=>save("savePlanning")} disabled={saving || loading}>{saving ? "Zapisywanie…" : "Zapisz harmonogram automatu"}</button>
+              <p>Stały harmonogram: 06:05 · 08:05 · 12:05 · 16:05. Ponowienia przy braku danych są obsługiwane automatycznie przez n8n.</p>
+              <button type="button" className="button button-primary" onClick={()=>save("savePlanning")} disabled={saving || loading}>{saving ? "Zapisywanie…" : "Zapisz włączenia przeliczeń"}</button>
             </div>
           </div>
-          <p className="settings-paragraph"><b>Kolejność zasobów:</b> Wydanie podstawowe → Wsparcie Przyjęć → Rezerwa specjalistyczna → Lider / rezerwa → Ostatnia rezerwa.</p>
-          <p className="settings-paragraph"><b>Przyjęcia:</b> planner uruchamia wsparcie pojedynczo według „Kolejności w roli” i stara się zostawić minimum jedną dostępną osobę na Przyjęciu.</p>
+          <p className="settings-paragraph"><b>Kolejność zasobów:</b> Wydanie podstawowe → Alina → Przyjęcia → Magda → pozostali rezerwowi → Ania.</p>
+          <p className="settings-paragraph"><b>Przyjęcia:</b> planner angażuje je dopiero po wykorzystaniu produktywnej pojemności Wydania i Aliny.</p>
           <p className="settings-paragraph"><b>Nadzór:</b> przy włączonej ochronie generator nie przydzieli ostatniego dostępnego lidera do PICK/PAK.</p>
           <p className="settings-paragraph"><b>Dyżur:</b> blok dyżuru z grafiku ma pierwszeństwo przed PICK/PAK. Preferowany proces i zadania pomocnicze ustawiasz w profilu pracownika.</p>
           <div className="settings-list-group">
