@@ -79,12 +79,6 @@ export function WorkPlan({
   const livePickCompleted = execution?.latest?.pick_completed ?? planSummary?.pick_completed ?? null;
   const livePackCompleted = execution?.latest?.pack_completed ?? planSummary?.pack_completed ?? null;
 
-  const executionCutoffMinutes = execution?.business_date === date && execution.latest?.collected_at
-    ? roundUpQuarter(warsawMinutesFromIso(execution.latest.collected_at))
-    : planningFrom
-      ? toMinutes(planningFrom)
-      : null;
-
   const pickDemandRbh = planSummary
     ? planSummary.pick_target_tasks / norms.pick_per_hour
     : null;
@@ -92,29 +86,11 @@ export function WorkPlan({
     ? planSummary.pack_target_orders / norms.pack_per_hour
     : null;
 
-  const pickExecutedRbh = execution?.business_date === date && execution.latest
-    ? execution.latest.pick_completed / norms.pick_per_hour
-    : planSummary
-      ? planSummary.pick_completed / norms.pick_per_hour
-      : null;
-  const packExecutedRbh = execution?.business_date === date && execution.latest
-    ? execution.latest.pack_completed / norms.pack_per_hour
-    : planSummary
-      ? planSummary.pack_completed / norms.pack_per_hour
-      : null;
-
-  const pickFutureRbh = planAvailable && executionCutoffMinutes !== null
-    ? sumScheduledRbh(employees, "pick", executionCutoffMinutes)
-    : planSummary?.planned_pick_rbh ?? null;
-  const packFutureRbh = planAvailable && executionCutoffMinutes !== null
-    ? sumScheduledRbh(employees, "pack", executionCutoffMinutes)
-    : planSummary?.planned_pack_rbh ?? null;
-
-  const pickScheduledRbh = pickExecutedRbh !== null && pickFutureRbh !== null
-    ? pickExecutedRbh + pickFutureRbh
+  const pickScheduledRbh = planAvailable
+    ? sumScheduledRbh(employees, "pick")
     : null;
-  const packScheduledRbh = packExecutedRbh !== null && packFutureRbh !== null
-    ? packExecutedRbh + packFutureRbh
+  const packScheduledRbh = planAvailable
+    ? sumScheduledRbh(employees, "pack")
     : null;
 
   return (
@@ -145,7 +121,7 @@ export function WorkPlan({
         <WorkDemand label="PAK pozostało" value={packRemaining} />
       </section>
 
-      <section className="rbh-demand-grid" aria-label="Zapotrzebowanie, wykonanie i plan RBH">
+      <section className="rbh-demand-grid" aria-label="Zapotrzebowanie i rozpisanie RBH">
         <RbhDemandCard
           process="PICK"
           demand={pickDemandRbh}
@@ -385,32 +361,12 @@ function toMinutes(time: string) {
   return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
 }
 
-function sumScheduledRbh(employees: Employee[], kind: "pick" | "pack", fromMinutes: number) {
+function sumScheduledRbh(employees: Employee[], kind: "pick" | "pack") {
   const minutes = employees.reduce((total, employee) => total + employee.blocks.reduce((sum, block) => {
     if (block.kind !== kind) return sum;
-    const start = Math.max(toMinutes(block.start), fromMinutes);
-    const end = toMinutes(block.end);
-    return sum + Math.max(0, end - start);
+    return sum + Math.max(0, toMinutes(block.end) - toMinutes(block.start));
   }, 0), 0);
   return minutes / 60;
-}
-
-function warsawMinutesFromIso(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 0;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Warsaw",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-  const hour = Number(parts.find(part => part.type === "hour")?.value ?? 0);
-  const minute = Number(parts.find(part => part.type === "minute")?.value ?? 0);
-  return hour * 60 + minute;
-}
-
-function roundUpQuarter(minutes: number) {
-  return Math.ceil(minutes / 15) * 15;
 }
 
 function RbhDemandCard({ process, demand, scheduled }: { process: "PICK" | "PAK"; demand: number | null; scheduled: number | null }) {
@@ -429,7 +385,7 @@ function RbhDemandCard({ process, demand, scheduled }: { process: "PICK" | "PAK"
           <strong>{formatRbh(demand)}</strong>
         </div>
         <div>
-          <small>Wykonane + plan</small>
+          <small>Rozpisane</small>
           <strong>{formatRbh(scheduled)}</strong>
         </div>
         <div className={balance === null ? undefined : covered ? "rbh-balance-covered" : "rbh-balance-shortage"}>
