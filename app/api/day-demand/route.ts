@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { signConfigEnvelope, type SignedConfigEnvelope } from "@/lib/config-auth";
-import { validateDayDemandSnapshot } from "@/lib/demand-utils";
+import { validateOrdersDemandSnapshot } from "@/lib/demand-utils";
 import type { DayDemandError } from "@/types/plan";
 
 export const runtime = "nodejs";
 
-const UPSTREAM_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-day-demand";
+const UPSTREAM_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-day-demand-v3";
 
 function respond(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       return unavailable(message, upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502, date);
     }
 
-    const validation = validateDayDemandSnapshot(result, date);
+    const validation = validateOrdersDemandSnapshot(result, date);
     if (!validation.valid) {
       console.error("Invalid day-demand response", validation.errors);
       return unavailable("Backend zwrócił niekompletny plan zamówień.", 502, date);
