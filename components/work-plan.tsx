@@ -341,8 +341,8 @@ export function WorkPlan({
                 <table>
                   <thead><tr><th scope="col">Proces</th><th scope="col">Wykonano</th><th scope="col">Pozostało</th><th scope="col">Zaplanowane RBH</th></tr></thead>
                   <tbody>
-                    <tr><td>PICK</td><td>{formatMaybe(livePickCompleted)}</td><td>{formatMaybe(pickRemaining)}</td><td>{formatHours(planSummary?.planned_pick_rbh)}</td></tr>
-                    <tr><td>PAK</td><td>{formatMaybe(livePackCompleted)}</td><td>{formatMaybe(packRemaining)}</td><td>{formatHours(planSummary?.planned_pack_rbh)}</td></tr>
+                    <tr><td>PICK</td><td>{formatMaybe(livePickCompleted)}</td><td>{formatMaybe(pickRemaining)}</td><td>{formatHours(pickScheduledRbh)}</td></tr>
+                    <tr><td>PAK</td><td>{formatMaybe(livePackCompleted)}</td><td>{formatMaybe(packRemaining)}</td><td>{formatHours(packScheduledRbh)}</td></tr>
                   </tbody>
                   <tfoot><tr><td>Status planu</td><td colSpan={3}>{planStatus === "CAPACITY_SHORTAGE" ? "Brak wymaganej capacity" : "Workload pokryty w planie roboczym"}</td></tr></tfoot>
                 </table>

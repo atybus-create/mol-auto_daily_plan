@@ -369,7 +369,7 @@ export function PlanDashboard() {
       setActiveTab("work");
       setToast(removeOverrideIds.length
         ? "Ręczna blokada zdjęta. Pozostała część planu została przeliczona."
-        : "Ręczna korekta zapisana. Pozostała część planu została przeliczona.");
+        : "Ręczna korekta zapisana. Pozostałe bloki planu nie zostały zmienione.");
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Błąd ręcznej korekty planu.");
     } finally {
