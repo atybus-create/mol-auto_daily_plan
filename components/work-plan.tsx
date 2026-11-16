@@ -22,6 +22,7 @@ type WorkPlanProps = {
   planSummary: GeneratedPlanSummary | null;
   planStatus: "DRAFT_READY" | "CAPACITY_SHORTAGE" | null;
   planGeneratedAt: string | null;
+  planningFrom: string | null;
   planAvailable: boolean;
   planRestoreLoading: boolean;
   planRestoreError: string;
@@ -47,6 +48,7 @@ export function WorkPlan({
   planSummary,
   planStatus,
   planGeneratedAt,
+  planningFrom,
   planAvailable,
   planRestoreLoading,
   planRestoreError,
@@ -77,14 +79,18 @@ export function WorkPlan({
   const livePickCompleted = execution?.latest?.pick_completed ?? planSummary?.pick_completed ?? null;
   const livePackCompleted = execution?.latest?.pack_completed ?? planSummary?.pack_completed ?? null;
 
-  const pickDemandRbh = targetCurrent !== null
-    ? (targetCurrent * norms.pick_per_hour * norms.pick_seconds / 3600) / norms.pick_per_hour
+  const pickDemandRbh = planSummary
+    ? planSummary.initial_pick_remaining / norms.pick_per_hour
     : null;
-  const packDemandRbh = targetCurrent !== null
-    ? targetCurrent / norms.pack_per_hour
+  const packDemandRbh = planSummary
+    ? planSummary.initial_pack_remaining / norms.pack_per_hour
     : null;
-  const pickScheduledRbh = planAvailable ? sumScheduledRbh(employees, "pick") : null;
-  const packScheduledRbh = planAvailable ? sumScheduledRbh(employees, "pack") : null;
+  const pickScheduledRbh = planAvailable && planningFrom
+    ? sumScheduledRbh(employees, "pick", planningFrom)
+    : null;
+  const packScheduledRbh = planAvailable && planningFrom
+    ? sumScheduledRbh(employees, "pack", planningFrom)
+    : null;
 
   return (
     <section id="work-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-work">
@@ -354,10 +360,13 @@ function toMinutes(time: string) {
   return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
 }
 
-function sumScheduledRbh(employees: Employee[], kind: "pick" | "pack") {
+function sumScheduledRbh(employees: Employee[], kind: "pick" | "pack", planningFrom: string) {
+  const fromMinutes = toMinutes(planningFrom);
   const minutes = employees.reduce((total, employee) => total + employee.blocks.reduce((sum, block) => {
     if (block.kind !== kind) return sum;
-    return sum + Math.max(0, toMinutes(block.end) - toMinutes(block.start));
+    const start = Math.max(toMinutes(block.start), fromMinutes);
+    const end = toMinutes(block.end);
+    return sum + Math.max(0, end - start);
   }, 0), 0);
   return minutes / 60;
 }
