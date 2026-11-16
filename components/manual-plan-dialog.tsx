@@ -21,6 +21,7 @@ const labels: Record<ActivityKind, string> = {
   break: "Przerwa",
   clean: "Porządki",
   returns: "Zwroty",
+  warehouse: "Magazyn",
 };
 
 export function ManualPlanDialog({ employee, block, profile, saving, onClose, onSave, onRemove }: Props) {
@@ -38,9 +39,10 @@ export function ManualPlanDialog({ employee, block, profile, saving, onClose, on
     };
   }, []);
 
-  const allowed = (["pick", "pack", "presence", "clean", "returns", "break"] as ActivityKind[])
+  const allowed = (["pick", "pack", "presence", "clean", "returns", "warehouse", "break"] as ActivityKind[])
     .filter(kind => kind !== "pick" || profile?.can_pick !== false)
-    .filter(kind => kind !== "pack" || profile?.can_pack !== false);
+    .filter(kind => kind !== "pack" || profile?.can_pack !== false)
+    .filter(kind => kind !== "returns" || (employee.id === "dominika" && !employee.duty));
 
   function submit() {
     if (!start || !end || start >= end || !isQuarterHour(start) || !isQuarterHour(end)) return;
