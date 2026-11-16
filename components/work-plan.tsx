@@ -74,6 +74,8 @@ export function WorkPlan({
   const executionTimestamp = formatWarsawTimestamp(execution?.latest?.collected_at ?? null);
   const nextExecutionTimestamp = formatWarsawTimestamp(execution?.latest?.next_refresh_at ?? execution?.refresh?.next_refresh_at ?? null);
   const executionStatus = describeExecution(execution);
+  const livePickCompleted = execution?.latest?.pick_completed ?? planSummary?.pick_completed ?? null;
+  const livePackCompleted = execution?.latest?.pack_completed ?? planSummary?.pack_completed ?? null;
 
   const pickDemandRbh = targetCurrent !== null
     ? (targetCurrent * norms.pick_per_hour * norms.pick_seconds / 3600) / norms.pick_per_hour
@@ -274,13 +276,13 @@ export function WorkPlan({
           <section className="pace-card card" aria-labelledby="pace-title">
             <div className="pace-heading">
               <div><p className="eyebrow">TEMPO ZESPOŁU</p><h2 id="pace-title">Realizacja względem planu</h2></div>
-              <div className="refresh-info"><span className="refresh-dot" /><span>Odświeżanie co 30 min</span></div>
+              <div className="refresh-info"><span className="refresh-dot" /><span>ES co 30 min · ekran sprawdza co 5 min</span></div>
             </div>
             <div className="pace-rows">
               {processes.map((process) => {
-                const actual = planSummary
-                  ? (process === "pick" ? planSummary.pick_completed : planSummary.pack_completed)
-                  : 0;
+                const actual = process === "pick"
+                  ? (livePickCompleted ?? 0)
+                  : (livePackCompleted ?? 0);
                 const target = planSummary
                   ? (process === "pick" ? planSummary.pick_target_tasks : planSummary.pack_target_orders)
                   : employees.reduce((sum, employee) => sum + targetFor(employee, process, norms), 0);
@@ -332,8 +334,8 @@ export function WorkPlan({
                 <table>
                   <thead><tr><th scope="col">Proces</th><th scope="col">Wykonano</th><th scope="col">Pozostało</th><th scope="col">Zaplanowane RBH</th></tr></thead>
                   <tbody>
-                    <tr><td>PICK</td><td>{formatMaybe(planSummary?.pick_completed)}</td><td>{formatMaybe(planSummary?.initial_pick_remaining)}</td><td>{formatHours(planSummary?.planned_pick_rbh)}</td></tr>
-                    <tr><td>PAK</td><td>{formatMaybe(planSummary?.pack_completed)}</td><td>{formatMaybe(planSummary?.initial_pack_remaining)}</td><td>{formatHours(planSummary?.planned_pack_rbh)}</td></tr>
+                    <tr><td>PICK</td><td>{formatMaybe(livePickCompleted)}</td><td>{formatMaybe(pickRemaining)}</td><td>{formatHours(planSummary?.planned_pick_rbh)}</td></tr>
+                    <tr><td>PAK</td><td>{formatMaybe(livePackCompleted)}</td><td>{formatMaybe(packRemaining)}</td><td>{formatHours(planSummary?.planned_pack_rbh)}</td></tr>
                   </tbody>
                   <tfoot><tr><td>Status planu</td><td colSpan={3}>{planStatus === "CAPACITY_SHORTAGE" ? "Brak wymaganej capacity" : "Workload pokryty w planie roboczym"}</td></tr></tfoot>
                 </table>
