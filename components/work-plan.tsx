@@ -134,6 +134,7 @@ export function WorkPlan({
         {hasSavedPlan && <span><i className="legend-swatch break" />Przerwa</span>}
         {hasSavedPlan && <span><i className="legend-swatch clean" />Porządki</span>}
         {hasSavedPlan && <span><i className="legend-swatch returns" />Zwroty</span>}
+        {hasSavedPlan && <span><i className="legend-swatch warehouse" />Magazyn</span>}
         <span className="legend-hint">
           {hasSavedPlan
             ? (editingEnabled ? "Kliknij blok, aby ręcznie skorygować plan" : "Ręczna edycja chwilowo zablokowana podczas przeliczania")
@@ -148,7 +149,7 @@ export function WorkPlan({
             <h2 id="schedule-title">{hasSavedPlan ? "Harmonogram dnia" : "Grafik wejściowy"}</h2>
           </div>
           <div className="schedule-tools">
-            <span className="resolution-note">Siatka co 5 min · plan docelowo w blokach 15 min</span>
+            <span className="resolution-note">Siatka co 5 min · bloki PICK/PAK min. 30 min</span>
             <button
               className="icon-button"
               type="button"
