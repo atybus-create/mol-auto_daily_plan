@@ -1,6 +1,6 @@
 export type ProcessKind = "pick" | "pack";
 
-export type ActivityKind = ProcessKind | "presence" | "duty" | "break" | "clean" | "returns";
+export type ActivityKind = ProcessKind | "presence" | "duty" | "break" | "clean" | "returns" | "warehouse";
 
 export type ActivityBlock = {
   start: string;
