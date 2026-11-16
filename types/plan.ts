@@ -121,6 +121,7 @@ export type DayDemandV2Snapshot = Omit<DayDemandSnapshot, "slots"> & {
   corrected_plan_gross_total: number | null;
   real_inflow_to_now: RealInflowSummary;
   remaining_forecast: RemainingForecastSummary;
+  leader_cutoff?: LeaderCutoffState;
   slots: CorrectedForecastSlot[];
 };
 
@@ -202,7 +203,15 @@ export type DayDemandV3Snapshot = Omit<DayDemandSnapshot, "slots" | "forecast_ki
   nowcast_forecast: V3NowcastSummary;
   real_inflow_to_now: V3RealInflowSummary;
   remaining_forecast: V3RemainingForecastSummary;
+  leader_cutoff?: LeaderCutoffState;
   slots: V3ForecastSlot[];
+};
+
+export type LeaderCutoffState = {
+  mode: "STANDARD" | "SHORTENED";
+  cutoff_local: string | null;
+  changed_at: string | null;
+  excluded_orders: number;
 };
 
 export type OrdersDemandSnapshot = DayDemandSnapshot | DayDemandV2Snapshot | DayDemandV3Snapshot;
