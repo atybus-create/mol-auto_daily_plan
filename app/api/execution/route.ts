@@ -6,6 +6,7 @@ import type { ExecutionSnapshotError, ExecutionSnapshotResponse } from "@/types/
 export const runtime = "nodejs";
 
 const EXECUTION_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-execution";
+const REFRESH_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-refresh-live";
 
 function respond(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -47,5 +48,52 @@ export async function GET(request: NextRequest) {
     return respond(data, result.ok && data.ok ? 200 : (result.ok ? 502 : result.status));
   } catch {
     return respond({ ok: false, error: "execution_unavailable", message: "Dane wykonania ES są chwilowo niedostępne." } satisfies ExecutionSnapshotError, 502);
+  }
+}
+
+
+export async function POST(request: NextRequest) {
+  if (!verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value)) {
+    return respond({ ok: false, error: "unauthorized", message: "Wymagane logowanie." }, 401);
+  }
+
+  let body: { date?: string } = {};
+  try {
+    body = await request.json() as { date?: string };
+  } catch {
+    return respond({ ok: false, error: "invalid_body", message: "Nieprawidłowe dane wejściowe." }, 400);
+  }
+
+  const date = String(body.date ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+    return respond({ ok: false, error: "invalid_date", message: "Nieprawidłowa data." }, 400);
+  }
+
+  try {
+    const envelope: SignedConfigEnvelope = {
+      action: "refreshLiveInputs",
+      issued_at: Date.now(),
+      payload: { date },
+    };
+
+    const result = await fetch(REFRESH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ envelope, signature: signConfigEnvelope(envelope) }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    const text = await result.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return respond({ ok: false, error: "invalid_backend_response", message: "Backend odświeżania zwrócił nieprawidłową odpowiedź." }, 502);
+    }
+
+    return respond(data, result.ok ? 200 : result.status);
+  } catch {
+    return respond({ ok: false, error: "refresh_unavailable", message: "Nie udało się odświeżyć danych live." }, 502);
   }
 }
