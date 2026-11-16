@@ -29,15 +29,13 @@ function buildWorkTarget(demand: OrdersDemandSnapshot | null) {
   if (!demand) return { plan: null as number | null, current: null as number | null, difference: null as number | null };
 
   if ("contract_version" in demand && demand.contract_version === 3) {
-    const morning = demand.morning?.total ?? null;
-    if (morning === null) return { plan: null, current: null, difference: null };
-
-    const plan = morning + demand.slots.reduce((sum, slot) => sum + slot.baseline.eligible_today, 0);
-    const current = morning + demand.slots.reduce(
-      (sum, slot) => sum + (slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today),
-      0,
-    );
-    return { plan, current, difference: current - plan };
+    const plan = demand.required_today_baseline;
+    const current = demand.corrected_required_today;
+    return {
+      plan,
+      current,
+      difference: typeof plan === "number" && typeof current === "number" ? current - plan : null,
+    };
   }
 
   if ("contract_version" in demand && demand.contract_version === 2) {
@@ -330,6 +328,40 @@ export function PlanDashboard() {
     }
   }
 
+  async function recalculateAfterCutoff() {
+    if (planLoading) throw new Error("Plan jest już przeliczany.");
+    latestPlanRequest.current += 1;
+    setPlanLoading(true);
+    setToast("");
+    try {
+      const demandResponse = await fetch(`/api/orders?date=${encodeURIComponent(date)}&cutoff_refresh=${Date.now()}`, { cache: "no-store" });
+      const freshDemand = await demandResponse.json() as OrdersDemandResponse;
+      if (!demandResponse.ok || !freshDemand.ok || freshDemand.status !== "ready") {
+        throw new Error(freshDemand.ok ? "DAY DEMAND nie jest gotowy do przeliczenia." : freshDemand.error);
+      }
+      setDemand(freshDemand);
+
+      const response = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, demand: freshDemand, trigger: "BUTTON", trigger_ref: "ui_cutoff" }),
+      });
+      const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
+      if (!response.ok || !result.ok) {
+        throw new Error(result.ok ? "Nie udało się przeliczyć planu po zmianie cut-offu." : (result.message || result.error));
+      }
+      setGeneratedPlan(result);
+      setActiveTab("work");
+      setToast("Skrócony cut-off zapisany. Target, RBH i przyszła część planu zostały przeliczone.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Nie udało się przeliczyć planu po zmianie cut-offu.";
+      setToast(message);
+      throw err instanceof Error ? err : new Error(message);
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
   function openManualCorrection(employeeId: string, blockIndex: number) {
     if (!currentGeneratedPlan || planLoading) return;
     const employee = plannedEmployees.find(item => item.id === employeeId);
@@ -482,7 +514,7 @@ export function PlanDashboard() {
         )}
         {activeTab === "orders" && <OrdersView demand={demand} loading={demandLoading} error={demandError} />}
         {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} planning={planningSettings} version={configVersion}
-          loading={configLoading} error={configError} onReload={refresh}/>} 
+          date={date} loading={configLoading} error={configError} onReload={refresh} onCutoffApplied={recalculateAfterCutoff}/>} 
 
         <footer className="page-footer">
           <span>ESTYL.PL <b>·</b> MOL Plan Dnia</span>

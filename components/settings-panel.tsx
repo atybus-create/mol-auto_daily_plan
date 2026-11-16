@@ -4,15 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { normalizePlanningAutomationSettings, validatePlanningAutomationSettings } from "@/lib/planning-settings";
 import type { AuxiliaryPolicy, EmployeeProfile, PlannerNorms, PlannerRole, PreferredProcess, PlanningAutomationSettings, PlanningAutomationSlotId } from "@/types/plan";
 
-type SettingsTab = "employees" | "norms" | "planning" | "access";
+type SettingsTab = "employees" | "norms" | "planning" | "cutoff" | "access";
 type Props = {
   profiles: EmployeeProfile[];
   norms: PlannerNorms;
   planning: PlanningAutomationSettings;
   version: number;
+  date: string;
   loading: boolean;
   error: string;
   onReload: () => void;
+  onCutoffApplied: () => Promise<void>;
 };
 
 const groups = ["Lider / Specjalista", "Przyjęcia", "Wydanie"] as const;
@@ -68,7 +70,7 @@ function updateSlot(
   };
 }
 
-export function SettingsPanel({ profiles, norms, planning, version, loading, error, onReload }: Props) {
+export function SettingsPanel({ profiles, norms, planning, version, date, loading, error, onReload, onCutoffApplied }: Props) {
   const [tab, setTab] = useState<SettingsTab>("employees");
   const [selectedKey, setSelectedKey] = useState("");
   const [draft, setDraft] = useState<EmployeeProfile | null>(null);
@@ -78,6 +80,12 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
   const [notice, setNotice] = useState("");
   const [pinDraft, setPinDraft] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
+  const [cutoffMode, setCutoffMode] = useState<"STANDARD" | "SHORTENED">("STANDARD");
+  const [cutoffValue, setCutoffValue] = useState("12:00");
+  const [cutoffChangedAt, setCutoffChangedAt] = useState<string | null>(null);
+  const [cutoffLoading, setCutoffLoading] = useState(false);
+  const [cutoffSaving, setCutoffSaving] = useState(false);
+  const [cutoffNotice, setCutoffNotice] = useState("");
   const ordered = useMemo(() => [...profiles].sort((a,b) =>
     groups.indexOf(a.group_name as typeof groups[number]) - groups.indexOf(b.group_name as typeof groups[number])
     || a.display_name.localeCompare(b.display_name, "pl")
@@ -106,6 +114,88 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
   useEffect(() => { setNormDraft(norms); }, [norms]);
   useEffect(() => { setPlanningDraft(normalizePlanningAutomationSettings(planning)); }, [planning]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  const cutoffOptions = useMemo(() => {
+    const values: string[] = [];
+    for (let minutes = 8 * 60; minutes <= 16 * 60; minutes += 30) {
+      values.push(`${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`);
+    }
+    return values;
+  }, []);
+
+  const todayWarsaw = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+  const nowWarsaw = new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/Warsaw", hour12: false, hour: "2-digit", minute: "2-digit" });
+  const [nowHour, nowMinute] = nowWarsaw.split(":").map(Number);
+  const nowMinutes = nowHour * 60 + nowMinute;
+  const minAllowedMinutes = Math.ceil(nowMinutes / 30) * 30;
+  const minAllowedCutoff = `${String(Math.floor(minAllowedMinutes / 60)).padStart(2, "0")}:${String(minAllowedMinutes % 60).padStart(2, "0")}`;
+  const selectedDayIsToday = date === todayWarsaw;
+  const shorteningWindowClosed = selectedDayIsToday && minAllowedMinutes > 16 * 60;
+
+  function cutoffMinutes(value: string) {
+    const [h, m] = value.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function cutoffDisabled(value: string) {
+    return selectedDayIsToday && cutoffMinutes(value) < minAllowedMinutes;
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function readCutoff() {
+      setCutoffLoading(true);
+      setCutoffNotice("");
+      try {
+        const response = await fetch(`/api/day-cutoff?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal });
+        const data = await response.json() as { ok?: boolean; mode?: "STANDARD" | "SHORTENED"; cutoff_local?: string | null; changed_at?: string | null; message?: string; error?: string };
+        if (!response.ok || !data.ok) throw new Error(data.message || data.error || "Nie udało się pobrać cut-offu.");
+        const mode = data.mode === "SHORTENED" ? "SHORTENED" : "STANDARD";
+        setCutoffMode(mode);
+        setCutoffValue(data.cutoff_local || (shorteningWindowClosed ? "16:00" : cutoffOptions.find(value => !cutoffDisabled(value)) || "16:00"));
+        setCutoffChangedAt(data.changed_at || null);
+      } catch (err) {
+        if (!controller.signal.aborted) setCutoffNotice(err instanceof Error ? err.message : "Nie udało się pobrać cut-offu.");
+      } finally {
+        if (!controller.signal.aborted) setCutoffLoading(false);
+      }
+    }
+    void readCutoff();
+    return () => controller.abort();
+  }, [date]);
+
+  async function applyCutoff() {
+    if (cutoffSaving || shorteningWindowClosed && cutoffMode === "SHORTENED") return;
+    setCutoffSaving(true);
+    setCutoffNotice("");
+    try {
+      if (cutoffMode === "SHORTENED" && cutoffDisabled(cutoffValue)) {
+        throw new Error(`Nie można ustawić cut-offu wstecz. Najwcześniejsza dostępna godzina to ${minAllowedCutoff}. Wykonana i rozpoczęta część dnia nie może zostać cofnięta.`);
+      }
+      const response = await fetch("/api/day-cutoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, mode: cutoffMode, cutoff_local: cutoffMode === "SHORTENED" ? cutoffValue : null }),
+      });
+      const data = await response.json() as { ok?: boolean; cutoff_local?: string | null; changed_at?: string | null; min_cutoff?: string; message?: string; error?: string };
+      if (!response.ok || !data.ok) {
+        const message = data.error === "cutoff_in_past" && data.min_cutoff
+          ? `Nie można ustawić cut-offu wstecz. Najwcześniejsza dostępna godzina to ${data.min_cutoff}. Wykonana i rozpoczęta część dnia nie może zostać cofnięta.`
+          : data.message || data.error || "Nie udało się zapisać skróconego cut-offu.";
+        throw new Error(message);
+      }
+      setCutoffChangedAt(data.changed_at || null);
+      setCutoffNotice("Cut-off zapisany. Przeliczam target i przyszłą część planu…");
+      await onCutoffApplied();
+      setCutoffNotice(cutoffMode === "SHORTENED"
+        ? `Skrócony cut-off ${cutoffValue} jest aktywny. Plan został przeliczony.`
+        : "Przywrócono standardowy cut-off. Plan został przeliczony.");
+    } catch (err) {
+      setCutoffNotice(err instanceof Error ? err.message : "Błąd zapisu skróconego cut-offu.");
+    } finally {
+      setCutoffSaving(false);
+    }
+  }
 
   function updatePlanningSlot(id: PlanningAutomationSlotId, patch: Partial<PlanningAutomationSettings["slots"][number]>) {
     setPlanningDraft(current => updateSlot(current, id, patch));
@@ -190,6 +280,7 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
         <button type="button" className={tab==="employees" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("employees");setNotice("");}}>Pracownicy <b>{profiles.length}</b></button>
         <button type="button" className={tab==="norms" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("norms");setNotice("");}}>Normy i czasy</button>
         <button type="button" className={tab==="planning" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("planning");setNotice("");}}>Reguły planowania</button>
+        <button type="button" className={tab==="cutoff" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("cutoff");setNotice("");}}>Skrócony cut-off</button>
         <button type="button" className={tab==="access" ? "settings-nav-item active" : "settings-nav-item"} onClick={()=>{setTab("access");setNotice("");}}>Dostęp</button>
       </div>
 
@@ -376,6 +467,59 @@ export function SettingsPanel({ profiles, norms, planning, version, loading, err
                 <small>{roleLabel(person.planner_role)} · kolejność {person.allocation_rank} · {person.preferred_process === "pick" ? "PICK" : person.preferred_process === "pack" ? "PAK" : "bez preferencji"}{person.supervisor_guard ? " · NADZÓR" : ""}</small>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {tab === "cutoff" && (
+        <section className="card settings-norms cutoff-settings-card">
+          <div className="settings-card-heading">
+            <div><p className="eyebrow">WYJĄTEK DLA BIEŻĄCEGO DNIA</p><h2>Skrócony cut-off</h2></div>
+            <span>{cutoffMode === "SHORTENED" ? `Aktywny: ${cutoffValue}` : "Tryb standardowy"}</span>
+          </div>
+          <div className="cutoff-settings-body">
+            <p className="settings-paragraph">
+              Skrócony cut-off zmniejsza wyłącznie dzisiejszy target planistyczny. Nie zmienia reguł przewoźników ani przepływu zamówień do WMS.
+            </p>
+            <div className={cutoffMode === "SHORTENED" ? "cutoff-status active" : "cutoff-status"}>
+              <b>{cutoffMode === "SHORTENED" ? `Skrócony cut-off: ${cutoffValue}` : "Standardowy cut-off"}</b>
+              <span>{cutoffMode === "SHORTENED" ? "Późniejsze sloty nie zwiększają dzisiejszego targetu RBH." : "Planowanie działa według standardowego zakresu dnia."}</span>
+              {cutoffChangedAt && <small>Ostatnia decyzja: {new Date(cutoffChangedAt).toLocaleString("pl-PL")}</small>}
+            </div>
+            <div className="settings-fields-pair cutoff-fields">
+              <div className="settings-field">
+                <label htmlFor="cutoff-mode">Tryb na dzień {date}</label>
+                <select id="cutoff-mode" value={cutoffMode} disabled={!selectedDayIsToday} onChange={e=>{setCutoffMode(e.target.value as "STANDARD" | "SHORTENED");setCutoffNotice("");}}>
+                  <option value="STANDARD">Standardowy / bez skrócenia</option>
+                  <option value="SHORTENED" disabled={shorteningWindowClosed}>Skrócony cut-off</option>
+                </select>
+              </div>
+              <div className="settings-field">
+                <label htmlFor="cutoff-time">Godzina graniczna</label>
+                <select id="cutoff-time" value={cutoffValue} disabled={!selectedDayIsToday || cutoffMode !== "SHORTENED" || shorteningWindowClosed || cutoffLoading}
+                  onChange={e=>{setCutoffValue(e.target.value);setCutoffNotice("");}}>
+                  {cutoffOptions.map(value => <option key={value} value={value} disabled={cutoffDisabled(value)}>{value}{cutoffDisabled(value) ? " — minęło" : ""}</option>)}
+                </select>
+                {selectedDayIsToday && !shorteningWindowClosed && <small>Najwcześniejsza dostępna godzina teraz: <b>{minAllowedCutoff}</b>.</small>}
+              </div>
+            </div>
+            {!selectedDayIsToday && (
+              <div className="settings-alert">Skrócony cut-off można zmieniać wyłącznie dla bieżącego dnia. Dla innych dat widok jest tylko do odczytu.</div>
+            )}
+            {selectedDayIsToday && shorteningWindowClosed && (
+              <div className="settings-alert">Dzisiejsze okno planowania zostało zakończone. Skrócony cut-off można ustawić tylko przed 16:00. Możesz przywrócić tryb standardowy.</div>
+            )}
+            {cutoffMode === "SHORTENED" && selectedDayIsToday && cutoffDisabled(cutoffValue) && (
+              <div className="settings-alert error">Nie można ustawić cut-offu wstecz. Najwcześniejsza dostępna godzina to {minAllowedCutoff}. Wykonana i rozpoczęta część dnia nie może zostać cofnięta.</div>
+            )}
+            {cutoffNotice && <div className={cutoffNotice.startsWith("Nie ") || cutoffNotice.startsWith("Błąd") ? "settings-alert error" : "settings-alert"}>{cutoffNotice}</div>}
+          </div>
+          <div className="settings-editor-footer">
+            <p>Po zastosowaniu aplikacja pobierze świeży DAY DEMAND i przeliczy target, PICK, PAK, RBH oraz przyszłą część planu. Historia i ręczne blokady pozostają bez zmian.</p>
+            <button type="button" className="button button-primary" onClick={()=>{void applyCutoff();}}
+              disabled={!selectedDayIsToday || cutoffSaving || cutoffLoading || (cutoffMode === "SHORTENED" && (shorteningWindowClosed || cutoffDisabled(cutoffValue)))}>
+              {cutoffSaving ? "Przeliczanie…" : "Zastosuj i przelicz plan"}
+            </button>
           </div>
         </section>
       )}
