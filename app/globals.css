@@ -611,3 +611,21 @@ tfoot td { background: #f0f1f5; color: var(--ink); font-weight: 700; }
 .settings-pin-dialog .dialog-actions { margin-top: 20px; }
 .settings-access-card { max-width: 820px; padding-bottom: 0; }
 .settings-pin-change { padding: 0 18px 18px; }
+
+
+/* MOL shortened cutoff */
+.cutoff-settings-card { overflow: hidden; }
+.cutoff-settings-body { padding: 18px 20px 4px; }
+.cutoff-settings-body .settings-paragraph { padding: 0 0 14px; }
+.cutoff-fields { margin: 15px 0; }
+.cutoff-status { display: grid; gap: 4px; padding: 13px 15px; border: 1px solid var(--line); border-left: 4px solid #a7a9b3; border-radius: 6px; background: #fafafd; }
+.cutoff-status.active { border-left-color: var(--red); background: #fff7f8; }
+.cutoff-status b { color: var(--ink); font-size: 13px; }
+.cutoff-status span { color: var(--ink-soft); font-size: 11px; line-height: 1.45; }
+.cutoff-status small { color: #8b8e99; font-size: 9px; }
+.leader-cutoff-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 12px; padding: 11px 14px; border: 1px solid #efc3ca; border-left: 4px solid var(--red); border-radius: 6px; background: #fff6f7; color: #7c3541; font-size: 11px; }
+.leader-cutoff-banner b { color: #8f2638; font-size: 12px; }
+@media (max-width: 650px) {
+  .cutoff-settings-body { padding: 14px 14px 2px; }
+  .leader-cutoff-banner { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
