@@ -44,7 +44,13 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
         </div>
       </section>
 
-      {demand.warnings.length > 0 && <div className="demand-warning" role="status">{demand.warnings.join(" · ")}</div>}
+      {"leader_cutoff" in demand && demand.leader_cutoff?.mode === "SHORTENED" && (
+        <div className="leader-cutoff-banner" role="status">
+          <b>Skrócony cut-off lidera: {demand.leader_cutoff.cutoff_local}</b>
+          <span>Dzisiejszy target nie uwzględnia późniejszych slotów · wyłączono {formatNumber(demand.leader_cutoff.excluded_orders)} zam.</span>
+        </div>
+      )}
+            {demand.warnings.length > 0 && <div className="demand-warning" role="status">{demand.warnings.join(" · ")}</div>}
 
       <div className="orders-summary demand-summary">
         {v3 && v3Summary ? (
@@ -386,22 +392,13 @@ function buildV3Summary(demand: DayDemandV3Snapshot) {
     planDayUnder: morning ? morning.under + planInflowUnder : null,
     correctedDayPl: morning ? morning.pl + correctedInflowPl : null,
     correctedDayUnder: morning ? morning.under + correctedInflowUnder : null,
-    planEligibleDay: morning ? morning.total + demand.slots.reduce((sum, slot) => sum + slot.baseline.eligible_today, 0) : null,
-    correctedEligibleDay: morning ? morning.total + demand.slots.reduce(
-      (sum, slot) => sum + (slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today),
-      0,
-    ) : null,
-    eligibleDifference: demand.slots.reduce(
-      (sum, slot) => sum + ((slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today) - slot.baseline.eligible_today),
-      0,
-    ),
-    correctedAfterCutoff: morning
-      ? (morning.total + correctedInflowTotal) - (
-          morning.total + demand.slots.reduce(
-            (sum, slot) => sum + (slot.actual ? slot.actual.eligible_total : slot.baseline.eligible_today),
-            0,
-          )
-        )
+    planEligibleDay: demand.required_today_baseline,
+    correctedEligibleDay: demand.corrected_required_today,
+    eligibleDifference: typeof demand.required_today_baseline === "number" && typeof demand.corrected_required_today === "number"
+      ? demand.corrected_required_today - demand.required_today_baseline
+      : 0,
+    correctedAfterCutoff: morning && typeof demand.corrected_required_today === "number"
+      ? (morning.total + correctedInflowTotal) - demand.corrected_required_today
       : null,
   };
 }
