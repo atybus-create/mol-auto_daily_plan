@@ -15,7 +15,7 @@ type ScheduleResponse = { ok: boolean; error?: string; date: string; version: nu
 type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]; norms: PlannerNorms; planning?: PlanningAutomationSettings; version: number };
 
 const defaultNorms: PlannerNorms = { pick_per_hour: 210, pack_per_hour: 70, pick_seconds: 22, pack_seconds: 50 };
-const EXECUTION_REFRESH_MS = 30 * 60 * 1000;
+const EXECUTION_REFRESH_MS = 5 * 60 * 1000;
 const PLAN_REFRESH_MS = 5 * 60 * 1000;
 const DEMAND_REFRESH_MS = 5 * 60 * 1000;
 const leaderKeys = new Set(["magda_w", "aso", "alina"]);
