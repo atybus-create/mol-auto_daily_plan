@@ -100,6 +100,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .legend-swatch.break { background: #cfd2da; }
 .legend-swatch.clean { background: #8466a7; }
 .legend-swatch.returns { background: #428f98; }
+.legend-swatch.warehouse { background: #ba9767; }
 .legend-hint { margin-left: auto; color: #999ba6; font-size: 11px; }
 
 .schedule-card { overflow: hidden; }
@@ -136,6 +137,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .activity-block.break { background: #f0f1f4; border-color: #e6e7eb; color: #777b88; }
 .activity-block.clean { background: var(--clean); border-color: #ded2ed; color: #70528f; }
 .activity-block.returns { background: var(--returns); border-color: #cde5e8; color: #347982; }
+.activity-block.warehouse { background: #f2e9d9; border-color: #e6d4b8; color: #75572e; }
 .activity-block[aria-pressed="true"] { outline: 2px solid var(--navy-soft); outline-offset: 1px; }
 .activity-block.manual { box-shadow: inset 0 0 0 1px #31364a; }
 .manual-lock { margin-right: 5px; font-size: 7px; }
