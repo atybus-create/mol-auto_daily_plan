@@ -476,7 +476,7 @@ export function PlanDashboard() {
         </nav>
 
         {activeTab === "work" && (
-          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} targetPlan={workTarget.plan} targetCurrent={workTarget.current} targetDifference={workTarget.difference} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={Boolean(currentGeneratedPlan) && !planLoading}
+          <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} targetPlan={workTarget.plan} targetCurrent={workTarget.current} targetDifference={workTarget.difference} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planningFrom={currentGeneratedPlan?.planning_from ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={Boolean(currentGeneratedPlan) && !planLoading}
             onToggleCollapsed={() => setCollapsed(x => !x)}
             onBlockClick={(employeeId, blockIndex) => openManualCorrection(employeeId, blockIndex)}/>
         )}
