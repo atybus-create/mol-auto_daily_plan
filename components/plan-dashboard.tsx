@@ -82,6 +82,7 @@ export function PlanDashboard() {
   const [planRestoreError, setPlanRestoreError] = useState("");
   const [execution, setExecution] = useState<ExecutionSnapshotResponse | null>(null);
   const [executionLoading, setExecutionLoading] = useState(true);
+  const [refreshLoading, setRefreshLoading] = useState(false);
   const [editTarget, setEditTarget] = useState<{ employee: Employee; block: ActivityBlock } | null>(null);
   const [settingsPinOpen, setSettingsPinOpen] = useState(false);
   const [settingsPinBusy, setSettingsPinBusy] = useState(false);
@@ -412,7 +413,26 @@ export function PlanDashboard() {
     setActiveTab(tab);
   }
 
-  const refresh = () => { setReload(x => x + 1); };
+  async function refresh() {
+    if (refreshLoading) return;
+    setRefreshLoading(true);
+    setToast("");
+    try {
+      const response = await fetch("/api/execution", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string; message?: string };
+      if (!response.ok || !result.ok) throw new Error(result.message || result.error || "Nie udało się odświeżyć danych.");
+      setReload(x => x + 1);
+      setToast("Dane live odświeżone z EasyStorage.");
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Nie udało się odświeżyć danych.");
+    } finally {
+      setRefreshLoading(false);
+    }
+  }
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
     { tab: "orders", title: "Zamówienia", hint: "06:00 + realny spływ" },
@@ -436,7 +456,7 @@ export function PlanDashboard() {
           <label className="date-picker">Dzień pracy
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
-          <button className="button button-secondary" type="button" disabled={scheduleLoading || configLoading} onClick={refresh}>↻ Odśwież dane</button>
+          <button className="button button-secondary" type="button" disabled={refreshLoading || scheduleLoading || configLoading} onClick={() => { void refresh(); }}>{refreshLoading ? "Odświeżanie…" : "↻ Odśwież dane"}</button>
           <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading || demandLoading || executionLoading || !demand || demand.status !== "ready"} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>
           <form action="/api/auth/logout" method="post" className="logout-form">
             <button className="button button-secondary logout-button" type="submit">Wyloguj</button>
