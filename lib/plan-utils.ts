@@ -21,6 +21,7 @@ export const activityLabels = {
   break: "Przerwa",
   clean: "Porządki",
   returns: "Zwroty",
+  warehouse: "Magazyn",
 } as const;
 
 export function timeToMinutes(time: string) {
