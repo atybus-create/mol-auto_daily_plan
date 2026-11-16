@@ -489,20 +489,23 @@ export function SettingsPanel({ profiles, norms, planning, version, date, loadin
             <div className="settings-fields-pair cutoff-fields">
               <div className="settings-field">
                 <label htmlFor="cutoff-mode">Tryb na dzień {date}</label>
-                <select id="cutoff-mode" value={cutoffMode} onChange={e=>{setCutoffMode(e.target.value as "STANDARD" | "SHORTENED");setCutoffNotice("");}}>
+                <select id="cutoff-mode" value={cutoffMode} disabled={!selectedDayIsToday} onChange={e=>{setCutoffMode(e.target.value as "STANDARD" | "SHORTENED");setCutoffNotice("");}}>
                   <option value="STANDARD">Standardowy / bez skrócenia</option>
                   <option value="SHORTENED" disabled={shorteningWindowClosed}>Skrócony cut-off</option>
                 </select>
               </div>
               <div className="settings-field">
                 <label htmlFor="cutoff-time">Godzina graniczna</label>
-                <select id="cutoff-time" value={cutoffValue} disabled={cutoffMode !== "SHORTENED" || shorteningWindowClosed || cutoffLoading}
+                <select id="cutoff-time" value={cutoffValue} disabled={!selectedDayIsToday || cutoffMode !== "SHORTENED" || shorteningWindowClosed || cutoffLoading}
                   onChange={e=>{setCutoffValue(e.target.value);setCutoffNotice("");}}>
                   {cutoffOptions.map(value => <option key={value} value={value} disabled={cutoffDisabled(value)}>{value}{cutoffDisabled(value) ? " — minęło" : ""}</option>)}
                 </select>
                 {selectedDayIsToday && !shorteningWindowClosed && <small>Najwcześniejsza dostępna godzina teraz: <b>{minAllowedCutoff}</b>.</small>}
               </div>
             </div>
+            {!selectedDayIsToday && (
+              <div className="settings-alert">Skrócony cut-off można zmieniać wyłącznie dla bieżącego dnia. Dla innych dat widok jest tylko do odczytu.</div>
+            )}
             {selectedDayIsToday && shorteningWindowClosed && (
               <div className="settings-alert">Dzisiejsze okno planowania zostało zakończone. Skrócony cut-off można ustawić tylko przed 16:00. Możesz przywrócić tryb standardowy.</div>
             )}
@@ -514,7 +517,7 @@ export function SettingsPanel({ profiles, norms, planning, version, date, loadin
           <div className="settings-editor-footer">
             <p>Po zastosowaniu aplikacja pobierze świeży DAY DEMAND i przeliczy target, PICK, PAK, RBH oraz przyszłą część planu. Historia i ręczne blokady pozostają bez zmian.</p>
             <button type="button" className="button button-primary" onClick={()=>{void applyCutoff();}}
-              disabled={cutoffSaving || cutoffLoading || (cutoffMode === "SHORTENED" && (shorteningWindowClosed || cutoffDisabled(cutoffValue)))}>
+              disabled={!selectedDayIsToday || cutoffSaving || cutoffLoading || (cutoffMode === "SHORTENED" && (shorteningWindowClosed || cutoffDisabled(cutoffValue)))}>
               {cutoffSaving ? "Przeliczanie…" : "Zastosuj i przelicz plan"}
             </button>
           </div>
