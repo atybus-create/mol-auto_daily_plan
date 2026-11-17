@@ -8,6 +8,7 @@ import { ReportingPanel } from "@/components/reporting-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { SettingsPinDialog } from "@/components/settings-pin-dialog";
 import { WorkPlan } from "@/components/work-plan";
+import { formatWarsawSourceTime } from "@/lib/live-update";
 import { DEFAULT_PLANNING_AUTOMATION_SETTINGS, normalizePlanningAutomationSettings } from "@/lib/planning-settings";
 import type { ActivityBlock, AppTab, Employee, EmployeeProfile, ExecutionSnapshotError, ExecutionSnapshotResponse, GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResponse, OrdersDemandResponse, OrdersDemandSnapshot, PlanManualOverride, PlannerNorms, PlanningAutomationSettings } from "@/types/plan";
 
@@ -16,9 +17,9 @@ type ScheduleResponse = { ok: boolean; error?: string; date: string; version: nu
 type ConfigResponse = { ok: boolean; error?: string; profiles: EmployeeProfile[]; norms: PlannerNorms; planning?: PlanningAutomationSettings; version: number };
 
 const defaultNorms: PlannerNorms = { pick_per_hour: 210, pack_per_hour: 70, pick_seconds: 22, pack_seconds: 50 };
-const EXECUTION_REFRESH_MS = 5 * 60 * 1000;
+const EXECUTION_REFRESH_MS = 60 * 1000;
 const PLAN_REFRESH_MS = 5 * 60 * 1000;
-const DEMAND_REFRESH_MS = 5 * 60 * 1000;
+const DEMAND_REFRESH_MS = 60 * 1000;
 const leaderKeys = new Set(["magda_w", "aso", "alina"]);
 const receivingKeys = new Set(["mateusz", "nikita", "murat"]);
 
@@ -69,6 +70,8 @@ export function PlanDashboard() {
   const [settingsPinBusy, setSettingsPinBusy] = useState(false);
   const [settingsPinError, setSettingsPinError] = useState("");
   const latestPlanRequest = useRef(0);
+  const demandSourceTime = formatWarsawSourceTime(demand?.actual_as_of ?? demand?.source_as_of);
+  const executionSourceTime = formatWarsawSourceTime(execution?.latest?.collected_at);
 
   useEffect(() => {
     void fetch("/api/settings-access", { method: "DELETE" }).catch(() => undefined);
@@ -472,7 +475,12 @@ export function PlanDashboard() {
           <label className="date-picker">Dzień pracy
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
-          {activeTab !== "reporting" && <button className="button button-secondary" type="button" disabled={refreshLoading || scheduleLoading || configLoading} onClick={() => { void refresh(); }}>{refreshLoading ? "Odświeżanie…" : "↻ Odśwież dane"}</button>}
+          {activeTab !== "reporting" && <div className="live-refresh-control">
+            <button className="button button-secondary" type="button" disabled={refreshLoading || scheduleLoading || configLoading} onClick={() => { void refresh(); }}>{refreshLoading ? "Odświeżanie…" : "↻ Odśwież dane"}</button>
+            <small>
+              Auto co 30 min (06:00–18:00) · ostatnie: zam. {demandSourceTime ?? "—"} · ES {executionSourceTime ?? "—"}
+            </small>
+          </div>}
           {activeTab !== "reporting" && <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading || demandLoading || executionLoading || !demand || demand.status !== "ready"} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>}
           <form action="/api/auth/logout" method="post" className="logout-form">
             <button className="button button-secondary logout-button" type="submit">Wyloguj</button>

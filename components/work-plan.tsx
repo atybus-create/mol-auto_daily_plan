@@ -283,7 +283,7 @@ export function WorkPlan({
           <section className="pace-card card" aria-labelledby="pace-title">
             <div className="pace-heading">
               <div><p className="eyebrow">TEMPO ZESPOŁU</p><h2 id="pace-title">Realizacja względem planu</h2></div>
-              <div className="refresh-info"><span className="refresh-dot" /><span>ES co 30 min · ekran sprawdza co 5 min</span></div>
+              <div className="refresh-info"><span className="refresh-dot" /><span>Dane live co 30 min · ekran sprawdza co 1 min</span></div>
             </div>
             <div className="pace-rows">
               {processes.map((process) => {
