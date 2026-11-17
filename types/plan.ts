@@ -85,46 +85,6 @@ export type ActualInflowSlot = {
   data_status: string;
 };
 
-export type CorrectedForecastSlot = ForecastSlot & {
-  actual: ActualInflowSlot | null;
-  variance_to_forecast: number | null;
-  effective_today: number;
-  effective_source: "actual" | "forecast";
-  cumulative_effective_today: number | null;
-};
-
-export type RealInflowSummary = {
-  measured_slots: number;
-  last_slot_end: string | null;
-  eligible_actual: number;
-  all_actual: number;
-  pl_actual: number;
-  under_actual: number;
-  forecast_eligible_for_measured_slots: number;
-  variance: number;
-};
-
-export type RemainingForecastSummary = {
-  eligible_today: number;
-  after_cutoff: number;
-  gross_total: number;
-  pl: number;
-  under: number;
-};
-
-export type DayDemandV2Snapshot = Omit<DayDemandSnapshot, "slots"> & {
-  contract_version: 2;
-  actual_as_of: string | null;
-  required_today_baseline: number | null;
-  corrected_required_today: number | null;
-  correction_vs_plan: number;
-  corrected_plan_gross_total: number | null;
-  real_inflow_to_now: RealInflowSummary;
-  remaining_forecast: RemainingForecastSummary;
-  leader_cutoff?: LeaderCutoffState;
-  slots: CorrectedForecastSlot[];
-};
-
 export type V3ActualInflowSlot = ActualInflowSlot & {
   gross_pl: number;
   gross_under: number;
@@ -214,7 +174,7 @@ export type LeaderCutoffState = {
   excluded_orders: number;
 };
 
-export type OrdersDemandSnapshot = DayDemandSnapshot | DayDemandV2Snapshot | DayDemandV3Snapshot;
+export type OrdersDemandSnapshot = DayDemandV3Snapshot;
 
 export type DayDemandError = {
   ok: false;
@@ -223,7 +183,7 @@ export type DayDemandError = {
   business_date?: string;
 };
 
-export type DayDemandResponse = DayDemandSnapshot | DayDemandError;
+export type DayDemandResponse = DayDemandV3Snapshot | DayDemandError;
 export type OrdersDemandResponse = OrdersDemandSnapshot | DayDemandError;
 
 /** @deprecated Kept only for legacy demo fixtures. Production uses DayDemandSnapshot. */
