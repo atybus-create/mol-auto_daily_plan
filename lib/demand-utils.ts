@@ -1,4 +1,4 @@
-import type { DayDemandSnapshot, DemandTotals, ForecastSlot, ForecastTotals } from "@/types/plan";
+import type { DemandTotals, ForecastSlot, ForecastTotals } from "@/types/plan";
 
 const SLOT_MINUTES = 30;
 const START_MINUTES = 6 * 60;
@@ -159,11 +159,6 @@ export function validateDayDemandSnapshot(value: unknown, requestedDate?: string
   }
   return { valid: errors.length === 0, errors };
 }
-
-export function asDayDemandSnapshot(value: unknown, requestedDate?: string): DayDemandSnapshot | null {
-  return validateDayDemandSnapshot(value, requestedDate).valid ? value as DayDemandSnapshot : null;
-}
-
 
 export function validateOrdersDemandSnapshot(value: unknown, requestedDate?: string): DemandValidation {
   if (!isRecord(value) || value.contract_version !== 3) {
