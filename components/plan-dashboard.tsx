@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ManualPlanDialog } from "@/components/manual-plan-dialog";
 import { OrdersView } from "@/components/orders-view";
+import { ReportingPanel } from "@/components/reporting-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { SettingsPinDialog } from "@/components/settings-pin-dialog";
 import { WorkPlan } from "@/components/work-plan";
@@ -450,6 +451,7 @@ export function PlanDashboard() {
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
     { tab: "orders", title: "Zamówienia", hint: "06:00 + realny spływ" },
+    { tab: "reporting", title: "Raportowanie" },
     { tab: "settings", title: "Ustawienia" },
   ];
 
@@ -470,8 +472,8 @@ export function PlanDashboard() {
           <label className="date-picker">Dzień pracy
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
-          <button className="button button-secondary" type="button" disabled={refreshLoading || scheduleLoading || configLoading} onClick={() => { void refresh(); }}>{refreshLoading ? "Odświeżanie…" : "↻ Odśwież dane"}</button>
-          <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading || demandLoading || executionLoading || !demand || demand.status !== "ready"} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>
+          {activeTab !== "reporting" && <button className="button button-secondary" type="button" disabled={refreshLoading || scheduleLoading || configLoading} onClick={() => { void refresh(); }}>{refreshLoading ? "Odświeżanie…" : "↻ Odśwież dane"}</button>}
+          {activeTab !== "reporting" && <button className="button button-primary" type="button" disabled={planLoading || scheduleLoading || configLoading || demandLoading || executionLoading || !demand || demand.status !== "ready"} onClick={generatePlan}>{planLoading ? "Przeliczanie…" : "Przelicz plan"}</button>}
           <form action="/api/auth/logout" method="post" className="logout-form">
             <button className="button button-secondary logout-button" type="submit">Wyloguj</button>
           </form>
@@ -495,6 +497,7 @@ export function PlanDashboard() {
             onBlockClick={(employeeId, blockIndex) => openManualCorrection(employeeId, blockIndex)}/>
         )}
         {activeTab === "orders" && <OrdersView demand={demand} loading={demandLoading} error={demandError} />}
+        {activeTab === "reporting" && <ReportingPanel />}
         {activeTab === "settings" && <SettingsPanel profiles={profiles} norms={norms} planning={planningSettings} version={configVersion}
           date={date} loading={configLoading} error={configError} onReload={refresh} onCutoffApplied={recalculateAfterCutoff}/>} 
 

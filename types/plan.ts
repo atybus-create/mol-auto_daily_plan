@@ -197,7 +197,7 @@ export type OrderFlow = {
   observedThrough: string;
 };
 
-export type AppTab = "work" | "orders" | "settings";
+export type AppTab = "work" | "orders" | "reporting" | "settings";
 
 export type PlannerRole = "standard" | "receiving_support" | "specialist_reserve" | "leader_reserve" | "last_resort";
 export type PreferredProcess = "balanced" | "pick" | "pack";

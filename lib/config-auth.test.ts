@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-// @ts-expect-error Node's strip-types test runner requires the explicit TypeScript extension.
 import { signConfigEnvelope, verifyConfigEnvelope, type SignedConfigEnvelope } from "./config-auth.ts";
 
 test("accepts a fresh signed getLatestPlan envelope", () => {
-  process.env.MOL_SESSION_SECRET = "test-only-session-secret-with-at-least-32-characters";
+  process.env.MOL_BACKEND_SIGNING_SECRET = "test-only-backend-secret-with-at-least-32-characters";
   const envelope: SignedConfigEnvelope = {
     action: "getLatestPlan",
     issued_at: Date.now(),
@@ -15,7 +14,7 @@ test("accepts a fresh signed getLatestPlan envelope", () => {
 });
 
 test("rejects a modified latest-plan payload", () => {
-  process.env.MOL_SESSION_SECRET = "test-only-session-secret-with-at-least-32-characters";
+  process.env.MOL_BACKEND_SIGNING_SECRET = "test-only-backend-secret-with-at-least-32-characters";
   const envelope: SignedConfigEnvelope = {
     action: "getLatestPlan",
     issued_at: Date.now(),
@@ -28,7 +27,7 @@ test("rejects a modified latest-plan payload", () => {
 
 
 test("accepts a fresh signed savePlanning envelope", () => {
-  process.env.MOL_SESSION_SECRET = "test-only-session-secret-with-at-least-32-characters";
+  process.env.MOL_BACKEND_SIGNING_SECRET = "test-only-backend-secret-with-at-least-32-characters";
   const envelope: SignedConfigEnvelope = {
     action: "savePlanning",
     issued_at: Date.now(),
