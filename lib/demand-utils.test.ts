@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner requires the explicit TypeScript extension.
-import { FORECAST_SLOT_STARTS, expectedSlotEnd, grossPlan, validateDayDemandSnapshot } from "./demand-utils.ts";
+import { FORECAST_SLOT_STARTS, expectedSlotEnd, grossPlan, validateDayDemandSnapshot, validateOrdersDemandSnapshot } from "./demand-utils.ts";
 
 test("creates exactly 20 half-hour slots from 06:00 to 16:00", () => {
   assert.equal(FORECAST_SLOT_STARTS.length, 20);
@@ -58,4 +58,10 @@ test("accepts a consistent ready snapshot and rejects a missing slot", () => {
   };
   assert.deepEqual(validateDayDemandSnapshot(snapshot, "2026-11-10"), { valid: true, errors: [] });
   assert.equal(validateDayDemandSnapshot({ ...snapshot, slots: slots.slice(1) }).valid, false);
+});
+
+
+test("orders endpoint rejects legacy demand contracts", () => {
+  assert.equal(validateOrdersDemandSnapshot({ contract_version: 2 }, "2026-11-17").valid, false);
+  assert.equal(validateOrdersDemandSnapshot({ ok: true }, "2026-11-17").valid, false);
 });
