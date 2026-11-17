@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Schedule } from "@/components/schedule";
-import { planEmployeeToScheduleEmployee, reportingDateLabel, warsawBusinessDate } from "@/lib/reporting-utils";
+import { planEmployeeToScheduleEmployee, productivityPercent, reportingDateLabel, reportingDateRange, warsawBusinessDate } from "@/lib/reporting-utils";
 import type { ReportingError, ReportingPerformanceResponse, ReportingPerformanceRow, ReportingPlansResponse, ReportingPlanVersion } from "@/types/reporting";
 
 type ReportingSection = "performance" | "plans";
@@ -14,6 +14,17 @@ function formatHours(value: number) {
 
 function formatInteger(value: number) {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatPercent(value: number | null) {
+  return value === null ? "—" : `${new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)}%`;
+}
+
+function productivityClass(value: number | null) {
+  if (value === null) return "unavailable";
+  if (value >= 100) return "good";
+  if (value >= 90) return "near";
+  return "behind";
 }
 
 function formatWarsawTime(value: string | null) {
@@ -48,7 +59,7 @@ async function exportPerformanceExcel(rows: ReportingPerformanceRow[], from: str
     { header: "Plan PAK h", key: "plan_pack_hours", width: 15 },
     { header: "Wykonanie PICK", key: "pick_completed", width: 19 },
     { header: "Wykonanie PAK", key: "pack_completed", width: 19 },
-    { header: "Target dnia", key: "target_orders", width: 15 },
+    { header: "Produktywność dnia", key: "productivity_percent", width: 21 },
     { header: "Wersja planu", key: "plan_version", width: 16 },
     { header: "Ostatni snapshot", key: "snapshot_collected_at", width: 22 },
     { header: "ID planu", key: "plan_id", width: 39 },
@@ -56,12 +67,17 @@ async function exportPerformanceExcel(rows: ReportingPerformanceRow[], from: str
     { header: "Status danych", key: "data_status", width: 18 },
   ];
   for (const row of rows) {
-    sheet.addRow({
+    const productivity = productivityPercent(row);
+    const sheetRow = sheet.addRow({
       ...row,
+      productivity_percent: productivity,
       business_date: new Date(`${row.business_date}T12:00:00Z`),
       operator: row.operator || "—",
       snapshot_collected_at: row.snapshot_collected_at ? new Date(row.snapshot_collected_at) : null,
     });
+    const productivityCell = sheetRow.getCell("productivity_percent");
+    productivityCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: productivity === null ? "FFF1F2F5" : productivity >= 100 ? "FFE8F3EC" : productivity >= 90 ? "FFFFF5DF" : "FFFFF0F2" } };
+    productivityCell.font = { bold: true, color: { argb: productivity === null ? "FF9295A1" : productivity >= 100 ? "FF2E6A45" : productivity >= 90 ? "FF8A6517" : "FFA23F50" } };
   }
   sheet.autoFilter = { from: "A1", to: "M1" };
   sheet.getRow(1).height = 24;
@@ -74,6 +90,7 @@ async function exportPerformanceExcel(rows: ReportingPerformanceRow[], from: str
   sheet.getColumn("snapshot_collected_at").numFmt = "dd.mm.yyyy hh:mm:ss";
   sheet.getColumn("plan_pick_hours").numFmt = "0.00";
   sheet.getColumn("plan_pack_hours").numFmt = "0.00";
+  sheet.getColumn("productivity_percent").numFmt = "0.0\"%\"";
   sheet.eachRow((row, index) => {
     if (index > 1) row.alignment = { vertical: "middle" };
   });
@@ -128,10 +145,27 @@ export function ReportingPanel() {
     setPerformanceLoading(true);
     setPerformanceError("");
     try {
-      const response = await fetch(`/api/reporting/performance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(rangeTo)}`, { cache: "no-store" });
-      const data = await response.json() as ReportingPerformanceResponse | ReportingError;
-      if (!response.ok || !data.ok) throw new Error(data.ok ? "Nie udało się pobrać raportu." : (data.message || data.error));
-      setPerformance(data);
+      const dates = reportingDateRange(from, rangeTo);
+      if (!dates.length) throw new Error("Data „Od” nie może być późniejsza niż data „Do”.");
+      const dailyReports: ReportingPerformanceResponse[] = [];
+      for (let index = 0; index < dates.length; index += 4) {
+        const batch = dates.slice(index, index + 4);
+        const results = await Promise.all(batch.map(async date => {
+          const response = await fetch(`/api/reporting/performance?from=${encodeURIComponent(date)}&to=${encodeURIComponent(date)}`, { cache: "no-store" });
+          const data = await response.json() as ReportingPerformanceResponse | ReportingError;
+          if (!response.ok || !data.ok) throw new Error(data.ok ? `${reportingDateLabel(date)}: nie udało się pobrać raportu.` : `${reportingDateLabel(date)}: ${data.message || data.error}`);
+          return data;
+        }));
+        dailyReports.push(...results);
+      }
+      setPerformance({
+        ok: true,
+        from,
+        to: rangeTo,
+        generated_at: dailyReports.map(report => report.generated_at).sort().at(-1) ?? new Date().toISOString(),
+        rows: dailyReports.flatMap(report => report.rows).sort((left, right) => left.business_date.localeCompare(right.business_date) || left.display_name.localeCompare(right.display_name, "pl")),
+        warnings: [...new Set(dailyReports.flatMap(report => report.warnings))],
+      });
     } catch (error) {
       setPerformance(null);
       setPerformanceError(error instanceof Error ? error.message : "Nie udało się pobrać raportu.");
@@ -208,7 +242,7 @@ export function ReportingPanel() {
               <button className={rangeMode === "day" ? "active" : ""} type="button" onClick={() => { setRangeMode("day"); setTo(from); }}>Jeden dzień</button>
               <button className={rangeMode === "range" ? "active" : ""} type="button" onClick={() => setRangeMode("range")}>Zakres dat</button>
             </div>
-            <label>Od<input type="date" value={from} onChange={event => { setFrom(event.target.value); if (rangeMode === "day") setTo(event.target.value); }} /></label>
+            <label>Od<input type="date" value={from} onChange={event => { const value = event.target.value; setFrom(value); if (rangeMode === "day" || value > to) setTo(value); }} /></label>
             {rangeMode === "range" && <label>Do<input type="date" min={from} value={to} onChange={event => setTo(event.target.value)} /></label>}
             <button className="button button-primary" type="button" onClick={() => void loadPerformance()} disabled={performanceLoading}>{performanceLoading ? "Pobieranie…" : "Pokaż raport"}</button>
             <button className="button button-secondary" type="button" onClick={() => void handleExcel()} disabled={!performance?.rows.length || Boolean(exportBusy)}>{exportBusy === "xlsx" ? "Tworzenie XLSX…" : "Eksportuj Excel (.xlsx)"}</button>
@@ -230,7 +264,7 @@ export function ReportingPanel() {
             </div>
             <div className="reporting-table-wrap">
               <table>
-                <thead><tr><th>Data</th><th>Pracownik</th><th>Plan PICK h</th><th>Plan PAK h</th><th>Wykonanie PICK</th><th>Wykonanie PAK</th><th>Target dnia</th><th>Wersja planu</th><th>Operator ES</th><th>Snapshot</th><th>Status</th></tr></thead>
+                <thead><tr><th>Data</th><th>Pracownik</th><th>Plan PICK h</th><th>Plan PAK h</th><th>Wykonanie PICK</th><th>Wykonanie PAK</th><th title="(PICK + 3 × PAK) / (210 × zaplanowane godziny PICK i PAK)">Produktywność dnia</th><th>Wersja planu</th><th>Operator ES</th><th>Snapshot</th><th>Status</th></tr></thead>
                 <tbody>
                   {performance?.rows.map((row, index) => (
                     <tr key={`${row.business_date}-${row.employee_key || row.operator || index}`}>
@@ -238,7 +272,7 @@ export function ReportingPanel() {
                       <td><strong>{row.display_name}</strong>{!row.mapped && <small className="mapping-warning">Niezmapowany operator</small>}</td>
                       <td>{formatHours(row.plan_pick_hours)}</td><td>{formatHours(row.plan_pack_hours)}</td>
                       <td>{formatInteger(row.pick_completed)}</td><td>{formatInteger(row.pack_completed)}</td>
-                      <td>{row.target_orders === null ? "—" : formatInteger(row.target_orders)}</td>
+                      <td><span className={`realization-badge ${productivityClass(productivityPercent(row))}`} title="Norma: 210 PICK/h lub 70 PAK/h; 1 PAK = 3 PICK">{formatPercent(productivityPercent(row))}</span></td>
                       <td>{row.plan_version === null ? "—" : `v${row.plan_version}`}</td>
                       <td>{row.operator || "—"}</td><td>{formatWarsawTime(row.snapshot_collected_at)}</td><td>{row.data_status}</td>
                     </tr>
