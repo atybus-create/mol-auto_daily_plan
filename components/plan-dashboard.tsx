@@ -453,7 +453,7 @@ export function PlanDashboard() {
   }
   const navItems: { tab: AppTab; title: string; hint?: string }[] = [
     { tab: "work", title: "Plan pracy" },
-    { tab: "orders", title: "Zamówienia", hint: "06:00 + realny spływ" },
+    { tab: "orders", title: "Zamówienia" },
     { tab: "reporting", title: "Raportowanie" },
     { tab: "settings", title: "Ustawienia" },
   ];
