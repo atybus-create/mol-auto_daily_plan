@@ -21,6 +21,7 @@ const groupDisplayNames: Record<string, string> = {
 export function Schedule({ employees, date, collapsed, editingEnabled, onBlockClick }: ScheduleProps) {
   const monday = isMonday(date);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [selectedHalfHour, setSelectedHalfHour] = useState<number | null>(null);
   const preferredGroups = ["Lider / Specjalista", "Przyjęcia", "Wydanie"];
   const groups = [...preferredGroups, ...Array.from(new Set(employees.map(employee => employee.group))).filter(group => !preferredGroups.includes(group))]
     .filter(group => employees.some(employee => employee.group === group));
@@ -37,7 +38,7 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
   return (
     <div className="schedule-scroll" tabIndex={0} aria-label="Harmonogram pracowników — przewijaj poziomo">
       <div className="schedule-grid">
-        <div className="time-header" aria-hidden="true">
+        <div className="time-header">
           <div className="employee-head">Pracownik</div>
           {Array.from({ length: 13 }, (_, index) => {
             const hour = 5 + index;
@@ -55,15 +56,28 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
             const hour = 5 + Math.floor(index / 2);
             const minute = index % 2 ? "30" : "00";
             return (
-              <div
-                className="half-hour-tick"
+              <button
+                className={`half-hour-tick${index % 2 === 0 ? " full-hour" : ""}`}
+                type="button"
                 key={`${hour}-${minute}`}
                 style={{ gridColumn: `${2 + index * 6} / span 6`, gridRow: 2 }}
+                aria-label={`Podświetl przedział ${String(hour).padStart(2, "0")}:${minute}–${String(hour + (minute === "30" ? 1 : 0)).padStart(2, "0")}:${minute === "30" ? "00" : "30"}`}
+                aria-pressed={selectedHalfHour === index}
+                onClick={() => setSelectedHalfHour(current => current === index ? null : index)}
               >
                 {String(hour).padStart(2, "0")}:{minute}
-              </div>
+              </button>
             );
           })}
+        </div>
+
+        <div className="schedule-time-overlay" aria-hidden="true">
+          {Array.from({ length: 26 }, (_, index) => (
+            <div
+              className={`schedule-time-column${index % 2 === 0 ? " full-hour" : ""}${selectedHalfHour === index ? " selected" : ""}`}
+              key={index}
+            />
+          ))}
         </div>
 
         {groups.map((group) => {

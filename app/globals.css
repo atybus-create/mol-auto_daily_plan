@@ -110,13 +110,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .resolution-note { color: #878a98; font-size: 11px; }
 .icon-button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink-soft); font-size: 18px; }
 .schedule-scroll { overflow: auto; border-top: 1px solid var(--line); scrollbar-color: #bfc2cc #f3f4f7; }
-.schedule-grid { min-width: 1240px; --name-col: 155px; }
+.schedule-grid { position: relative; min-width: 1240px; --name-col: 155px; }
 .time-header, .employee-row, .group-row { display: grid; grid-template-columns: var(--name-col) repeat(156, minmax(7px, 1fr)); }
 .time-header { position: sticky; top: 0; z-index: 3; height: 50px; grid-template-rows: 24px 26px; background: #f8f8fa; border-bottom: 1px solid #d9dbe2; }
 .employee-head { position: sticky; left: 0; z-index: 5; grid-row: 1 / span 2; display: flex; align-items: center; padding: 0 12px; background: #f8f8fa; border-right: 1px solid var(--line); color: #858897; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.hour-block { display: flex; align-items: flex-start; justify-content: center; padding-top: 6px; border-left: 1px solid #d4d6de; color: var(--ink); font-size: 11px; font-weight: 700; }
-.half-hour-tick { display: flex; align-items: center; height: 100%; padding-left: 3px; border-left: 1px solid #eaebef; color: #999ba6; font-size: 9px; white-space: nowrap; }
+.hour-block { display: flex; align-items: flex-start; justify-content: center; padding-top: 6px; border-left: 2px solid #aeb3c1; color: var(--ink); font-size: 11px; font-weight: 700; }
+.half-hour-tick { display: flex; align-items: center; height: 100%; padding: 0 0 0 3px; border: 0; border-left: 1px solid #cfd2db; border-radius: 0; background: transparent; color: #777b89; font: inherit; font-size: 9px; text-align: left; white-space: nowrap; cursor: pointer; }
+.half-hour-tick.full-hour { border-left: 2px solid #aeb3c1; }
+.half-hour-tick:hover { background: rgba(49, 57, 88, .045); color: var(--ink); }
+.half-hour-tick[aria-pressed="true"] { background: rgba(49, 57, 88, .1); box-shadow: inset 0 -2px 0 var(--navy); color: var(--ink); font-weight: 700; }
 .half-hour-tick span { position: absolute; bottom: 5px; left: 3px; color: #999ba6; font-size: 9px; white-space: nowrap; }
+.schedule-time-overlay { position: absolute; z-index: 1; top: 50px; right: 0; bottom: 0; left: var(--name-col); display: grid; grid-template-columns: repeat(26, minmax(0, 1fr)); pointer-events: none; }
+.schedule-time-column { border-left: 1px solid #cfd2db; }
+.schedule-time-column.full-hour { border-left: 2px solid #aeb3c1; }
+.schedule-time-column.selected { background: rgba(49, 57, 88, .085); }
 .group-row { min-height: 29px; background: #f1f2f6; border-bottom: 1px solid #e2e3e9; }
 .group-label { position: sticky; left: 0; z-index: 2; grid-column: 1 / -1; display: flex; align-items: center; padding: 0 12px; background: #f1f2f6; color: #5e6172; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .group-toggle { width: 100%; min-height: 29px; display: flex; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; text-transform: inherit; }
@@ -128,7 +135,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .employee-name small { margin-left: auto; color: #a0a2ad; font-size: 10px; font-weight: 500; }
 .employee-cell { grid-row: 1; align-self: stretch; border-left: 1px solid #f0f0f3; }
 .employee-row { position: relative; }
-.activity-block { position: relative; z-index: 1; grid-row: 1; align-self: center; display: flex; align-items: center; min-width: 0; height: 26px; margin: 0 2px; padding: 0 8px; overflow: hidden; border: 1px solid transparent; border-radius: 4px; color: #33374a; font-size: 10px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; transition: filter .12s ease, transform .12s ease; }
+.activity-block { position: relative; z-index: 2; grid-row: 1; align-self: center; display: flex; align-items: center; min-width: 0; height: 26px; margin: 0 2px; padding: 0 8px; overflow: hidden; border: 1px solid transparent; border-radius: 4px; color: #33374a; font-size: 10px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; transition: filter .12s ease, transform .12s ease; }
 .activity-block:hover { filter: saturate(1.15); transform: translateY(-1px); }
 .activity-block.pick { background: var(--pick); border-color: #c8e3d1; color: #285e3d; }
 .activity-block.pack { background: var(--pack); border-color: #f0ccce; color: #a5484e; }
@@ -143,7 +150,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .schedule-scrol
 .manual-lock { margin-right: 5px; font-size: 7px; }
 .grid-rail { display: grid; grid-template-columns: var(--name-col) repeat(156, minmax(7px, 1fr)); min-height: 34px; background: #fafafd; border-top: 1px solid var(--line); }
 .rail-label { display: flex; align-items: center; padding: 0 11px; color: #898c99; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-.cutoff-marker { grid-row: 1; align-self: center; display: flex; align-items: center; gap: 5px; width: max-content; max-width: calc(100% - 4px); overflow: hidden; padding: 4px 7px; border: 1px solid #f1d2d7; border-radius: 3px; background: #fff6f7; color: #a74352; font-size: 9px; white-space: nowrap; }
+.cutoff-marker { position: relative; z-index: 2; grid-row: 1; align-self: center; display: flex; align-items: center; gap: 5px; width: max-content; max-width: calc(100% - 4px); overflow: hidden; padding: 4px 7px; border: 1px solid #f1d2d7; border-radius: 3px; background: #fff6f7; color: #a74352; font-size: 9px; white-space: nowrap; }
 .cutoff-marker b { color: var(--red-dark); }
 .cutoff-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 13px; padding: 9px 13px; border-top: 1px solid var(--line); background: #fff; }
 .cutoff-title { color: #9395a0; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
