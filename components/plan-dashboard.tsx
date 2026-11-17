@@ -28,30 +28,12 @@ function defaultGroup(key: string) {
 function buildWorkTarget(demand: OrdersDemandSnapshot | null) {
   if (!demand) return { plan: null as number | null, current: null as number | null, difference: null as number | null };
 
-  if ("contract_version" in demand && demand.contract_version === 3) {
-    const plan = demand.required_today_baseline;
-    const current = demand.corrected_required_today;
-    return {
-      plan,
-      current,
-      difference: typeof plan === "number" && typeof current === "number" ? current - plan : null,
-    };
-  }
-
-  if ("contract_version" in demand && demand.contract_version === 2) {
-    const plan = demand.required_today_baseline;
-    const current = demand.corrected_required_today;
-    return {
-      plan,
-      current,
-      difference: typeof plan === "number" && typeof current === "number" ? current - plan : null,
-    };
-  }
-
+  const plan = demand.required_today_baseline;
+  const current = demand.corrected_required_today;
   return {
-    plan: demand.required_today,
-    current: demand.required_today,
-    difference: typeof demand.required_today === "number" ? 0 : null,
+    plan,
+    current,
+    difference: typeof plan === "number" && typeof current === "number" ? current - plan : null,
   };
 }
 

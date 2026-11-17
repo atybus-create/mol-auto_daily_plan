@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
           ok: true,
           business_date: demand.business_date,
           status: demand.status,
-          corrected_required_today: "corrected_required_today" in demand ? demand.corrected_required_today : demand.required_today,
+          corrected_required_today: demand.corrected_required_today,
           required_today: demand.required_today,
           generated_at: demand.generated_at,
         },
