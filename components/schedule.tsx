@@ -2,14 +2,14 @@
 
 import { useState, type CSSProperties } from "react";
 import { activityLabels, isMonday, SLOT_COUNT, slotsAt, timeToMinutes } from "@/lib/plan-utils";
-import type { Employee } from "@/types/plan";
+import type { ActivityBlock, Employee } from "@/types/plan";
 
 type ScheduleProps = {
   employees: Employee[];
   date: string;
   collapsed: boolean;
   editingEnabled: boolean;
-  onBlockClick: (employeeId: string, blockIndex: number, button: HTMLButtonElement) => void;
+  onBlockClick: (employeeId: string, block: ActivityBlock, button: HTMLButtonElement) => void;
 };
 
 const groupDisplayNames: Record<string, string> = {
@@ -17,6 +17,34 @@ const groupDisplayNames: Record<string, string> = {
   "Przyjęcia": "Przyjęcie",
   "Wydanie": "Wydanie",
 };
+
+function mergeBlocksForDisplay(blocks: ActivityBlock[]) {
+  const merged: ActivityBlock[] = [];
+  for (const block of blocks) {
+    const previous = merged[merged.length - 1];
+    if (previous && previous.kind === block.kind && previous.end === block.start) {
+      const sameManualOverride = Boolean(
+        previous.source === "manual"
+        && block.source === "manual"
+        && previous.locked
+        && block.locked
+        && previous.override_id
+        && previous.override_id === block.override_id,
+      );
+      merged[merged.length - 1] = {
+        ...previous,
+        end: block.end,
+        source: sameManualOverride ? "manual" : "auto",
+        locked: sameManualOverride,
+        override_id: sameManualOverride ? previous.override_id : null,
+        reason: sameManualOverride && previous.reason === block.reason ? previous.reason : undefined,
+      };
+    } else {
+      merged.push({ ...block });
+    }
+  }
+  return merged;
+}
 
 export function Schedule({ employees, date, collapsed, editingEnabled, onBlockClick }: ScheduleProps) {
   const monday = isMonday(date);
@@ -111,7 +139,7 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
                   {Array.from({ length: SLOT_COUNT }, (_, slot) => (
                     <div className="employee-cell" style={{ gridColumn: slot + 2 }} aria-hidden="true" key={slot} />
                   ))}
-                  {employee.blocks.map((block, blockIndex) => {
+                  {mergeBlocksForDisplay(employee.blocks).map((block, blockIndex) => {
                     const style: CSSProperties = {
                       gridColumn: `${2 + slotsAt(block.start)} / span ${(timeToMinutes(block.end) - timeToMinutes(block.start)) / 5}`,
                     };
@@ -122,7 +150,7 @@ export function Schedule({ employees, date, collapsed, editingEnabled, onBlockCl
                         style={style}
                         key={`${employee.id}-${block.start}-${blockIndex}`}
                         aria-label={`${employee.name}: ${activityLabels[block.kind]}, od ${block.start} do ${block.end}.${editingEnabled ? " Wybierz, aby zmienić czynność." : ""}`}
-                        onClick={(event) => onBlockClick(employee.id, blockIndex, event.currentTarget)}
+                        onClick={(event) => onBlockClick(employee.id, block, event.currentTarget)}
                       >
                         {block.source === "manual" && <span className="manual-lock" aria-hidden="true">◆</span>}
                         {activityLabels[block.kind]}
