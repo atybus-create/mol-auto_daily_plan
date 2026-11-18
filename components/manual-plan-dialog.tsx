@@ -29,7 +29,7 @@ export function ManualPlanDialog({ employee, block, profile, saving, onClose, on
   const [start, setStart] = useState(block.start);
   const [end, setEnd] = useState(block.end);
   const [activity, setActivity] = useState<ActivityKind>(block.kind === "duty" ? "presence" : block.kind);
-  const [reason, setReason] = useState(block.reason || "Korekta lidera");
+  const [reason, setReason] = useState(block.source === "manual" ? (block.reason || "Korekta lidera") : "Korekta lidera");
 
   useEffect(() => {
     const dialog = ref.current;
@@ -39,10 +39,13 @@ export function ManualPlanDialog({ employee, block, profile, saving, onClose, on
     };
   }, []);
 
-  const allowed = (["pick", "pack", "presence", "clean", "returns", "warehouse", "break"] as ActivityKind[])
+  const allowedBase = employee.duty
+    ? (["pick", "pack", "break"] as ActivityKind[])
+    : (["pick", "pack", "presence", "clean", "returns", "warehouse", "break"] as ActivityKind[]);
+  const allowed = allowedBase
     .filter(kind => kind !== "pick" || profile?.can_pick !== false)
     .filter(kind => kind !== "pack" || profile?.can_pack !== false)
-    .filter(kind => kind !== "returns" || (employee.id === "dominika" && !employee.duty));
+    .filter(kind => kind !== "returns" || employee.id === "dominika");
 
   function submit() {
     if (!start || !end || start >= end || !isQuarterHour(start) || !isQuarterHour(end)) return;
