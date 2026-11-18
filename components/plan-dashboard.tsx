@@ -27,6 +27,28 @@ function defaultGroup(key: string) {
   return leaderKeys.has(key) ? "Lider / Specjalista" : receivingKeys.has(key) ? "Przyjęcia" : "Wydanie";
 }
 
+function mergeAdjacentDisplayBlocks(blocks: ActivityBlock[]) {
+  const merged: ActivityBlock[] = [];
+  for (const block of blocks) {
+    const previous = merged[merged.length - 1];
+    const canMerge = Boolean(
+      previous
+      && previous.kind === block.kind
+      && previous.end === block.start
+      && previous.source !== "manual"
+      && block.source !== "manual"
+      && !previous.locked
+      && !block.locked,
+    );
+    if (canMerge && previous) {
+      merged[merged.length - 1] = { ...previous, end: block.end };
+    } else {
+      merged.push({ ...block });
+    }
+  }
+  return merged;
+}
+
 function buildWorkTarget(demand: OrdersDemandSnapshot | null) {
   if (!demand) return { plan: null as number | null, current: null as number | null, difference: null as number | null };
 
@@ -274,7 +296,7 @@ export function PlanDashboard() {
       group: person.group_name,
       duty: Boolean(scheduleMap.get(person.employee_key)?.duty),
       progress: { pick: 0, pack: 0 },
-      blocks: person.blocks.map(block => ({
+      blocks: mergeAdjacentDisplayBlocks(person.blocks.map(block => ({
         start: block.start,
         end: block.end,
         kind: block.activity,
@@ -282,7 +304,7 @@ export function PlanDashboard() {
         reason: block.reason,
         locked: block.locked,
         override_id: block.override_id,
-      })),
+      }))),
     }));
   }, [currentGeneratedPlan, employees, schedule]);
 
