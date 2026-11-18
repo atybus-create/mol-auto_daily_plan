@@ -6,7 +6,7 @@ import {
   targetFor,
 } from "@/lib/plan-utils";
 import { buildOperatorPerformance, type OperatorMapping, type ProcessPerformance } from "@/lib/operator-performance";
-import type { Employee, EmployeeProfile, ExecutionSnapshotResponse, GeneratedPlanSummary, ProcessKind, PlannerNorms } from "@/types/plan";
+import type { ActivityBlock, Employee, EmployeeProfile, ExecutionSnapshotResponse, GeneratedPlanSummary, ProcessKind, PlannerNorms } from "@/types/plan";
 
 type WorkPlanProps = {
   employees: Employee[];
@@ -29,7 +29,7 @@ type WorkPlanProps = {
   collapsed: boolean;
   editingEnabled: boolean;
   onToggleCollapsed: () => void;
-  onBlockClick: (employeeId: string, blockIndex: number, button: HTMLButtonElement) => void;
+  onBlockClick: (employeeId: string, block: ActivityBlock, button: HTMLButtonElement) => void;
 };
 
 const processes: ProcessKind[] = ["pick", "pack"];
