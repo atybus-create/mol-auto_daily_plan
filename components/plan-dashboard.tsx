@@ -27,28 +27,6 @@ function defaultGroup(key: string) {
   return leaderKeys.has(key) ? "Lider / Specjalista" : receivingKeys.has(key) ? "Przyjęcia" : "Wydanie";
 }
 
-function mergeAdjacentDisplayBlocks(blocks: ActivityBlock[]) {
-  const merged: ActivityBlock[] = [];
-  for (const block of blocks) {
-    const previous = merged[merged.length - 1];
-    const canMerge = Boolean(
-      previous
-      && previous.kind === block.kind
-      && previous.end === block.start
-      && previous.source !== "manual"
-      && block.source !== "manual"
-      && !previous.locked
-      && !block.locked,
-    );
-    if (canMerge && previous) {
-      merged[merged.length - 1] = { ...previous, end: block.end };
-    } else {
-      merged.push({ ...block });
-    }
-  }
-  return merged;
-}
-
 function buildWorkTarget(demand: OrdersDemandSnapshot | null) {
   if (!demand) return { plan: null as number | null, current: null as number | null, difference: null as number | null };
 
@@ -296,7 +274,7 @@ export function PlanDashboard() {
       group: person.group_name,
       duty: Boolean(scheduleMap.get(person.employee_key)?.duty),
       progress: { pick: 0, pack: 0 },
-      blocks: mergeAdjacentDisplayBlocks(person.blocks.map(block => ({
+      blocks: person.blocks.map(block => ({
         start: block.start,
         end: block.end,
         kind: block.activity,
@@ -304,7 +282,7 @@ export function PlanDashboard() {
         reason: block.reason,
         locked: block.locked,
         override_id: block.override_id,
-      }))),
+      })),
     }));
   }, [currentGeneratedPlan, employees, schedule]);
 
@@ -370,11 +348,10 @@ export function PlanDashboard() {
     }
   }
 
-  function openManualCorrection(employeeId: string, blockIndex: number) {
+  function openManualCorrection(employeeId: string, block: ActivityBlock) {
     if (!currentGeneratedPlan || planLoading) return;
     const employee = plannedEmployees.find(item => item.id === employeeId);
-    const block = employee?.blocks[blockIndex];
-    if (!employee || !block) return;
+    if (!employee) return;
     if (block.kind === "duty") {
       setToast("Dyżur pochodzi z grafiku i nie podlega ręcznej korekcie planu.");
       return;
@@ -524,7 +501,7 @@ export function PlanDashboard() {
         {activeTab === "work" && (
           <WorkPlan employees={plannedEmployees} profiles={profiles} execution={execution} norms={norms} date={date} targetPlan={workTarget.plan} targetCurrent={workTarget.current} targetDifference={workTarget.difference} pickRemaining={livePickRemaining} packRemaining={livePackRemaining} planSummary={currentGeneratedPlan?.summary ?? null} planStatus={currentGeneratedPlan?.status ?? null} planGeneratedAt={currentGeneratedPlan?.generated_at ?? null} planningFrom={currentGeneratedPlan?.planning_from ?? null} planAvailable={Boolean(currentGeneratedPlan)} planRestoreLoading={planRestoreLoading} planRestoreError={planRestoreError} collapsed={collapsed} editingEnabled={Boolean(currentGeneratedPlan) && !planLoading}
             onToggleCollapsed={() => setCollapsed(x => !x)}
-            onBlockClick={(employeeId, blockIndex) => openManualCorrection(employeeId, blockIndex)}/>
+            onBlockClick={(employeeId, block) => openManualCorrection(employeeId, block)}/>
         )}
         {activeTab === "orders" && <OrdersView demand={demand} loading={demandLoading} error={demandError} />}
         {activeTab === "reporting" && <ReportingPanel />}
