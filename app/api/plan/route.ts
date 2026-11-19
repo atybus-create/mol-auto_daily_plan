@@ -5,7 +5,7 @@ import type { GeneratedPlanError, GeneratedPlanResponse, LatestGeneratedPlanResp
 
 export const runtime = "nodejs";
 
-const PLAN_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-generate";
+const PLAN_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-generate-v4";
 const LATEST_PLAN_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-latest";
 
 function respond(data: unknown, status = 200) {
@@ -121,14 +121,7 @@ export async function POST(request: NextRequest) {
       issued_at: Date.now(),
       payload: {
         date,
-        demand: {
-          ok: true,
-          business_date: demand.business_date,
-          status: demand.status,
-          corrected_required_today: demand.corrected_required_today,
-          required_today: demand.required_today,
-          generated_at: demand.generated_at,
-        },
+        demand,
         trigger,
         trigger_ref: triggerRef,
         manual_overrides: manualOverrides,
