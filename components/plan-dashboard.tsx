@@ -360,7 +360,7 @@ export function PlanDashboard() {
   }
 
   async function submitManualCorrection(override: PlanManualOverride, removeOverrideIds: string[] = []) {
-    if (planLoading || !demand || demand.status !== "ready") return;
+    if (planLoading || !demand || demand.status !== "ready" || !currentGeneratedPlan) return;
     latestPlanRequest.current += 1;
     setPlanLoading(true);
     setToast("");
