@@ -101,6 +101,8 @@ export async function POST(request: NextRequest) {
       trigger_ref?: unknown;
       manual_overrides?: unknown;
       remove_override_ids?: unknown;
+      expected_plan_id?: unknown;
+      expected_revision?: unknown;
     };
     const date = typeof body.date === "string" ? body.date : "";
     const demand = body.demand as OrdersDemandSnapshot | undefined;
@@ -110,6 +112,12 @@ export async function POST(request: NextRequest) {
     const removeOverrideIds = Array.isArray(body.remove_override_ids)
       ? body.remove_override_ids.filter((value): value is string => typeof value === "string" && value.length > 0).slice(0, 100)
       : [];
+    const expectedPlanId = typeof body.expected_plan_id === "string" && body.expected_plan_id.length > 0
+      ? body.expected_plan_id.slice(0, 160)
+      : undefined;
+    const expectedRevision = Number.isInteger(body.expected_revision) && Number(body.expected_revision) > 0
+      ? Number(body.expected_revision)
+      : undefined;
 
     if (!validDate(date) || !demand || demand.ok !== true || demand.business_date !== date || demand.status !== "ready") {
       const error: GeneratedPlanError = { ok: false, error: "invalid_input", message: "Plan można wygenerować tylko dla kompletnego DAY DEMAND." };
@@ -133,6 +141,8 @@ export async function POST(request: NextRequest) {
         trigger_ref: triggerRef,
         manual_overrides: manualOverrides,
         remove_override_ids: removeOverrideIds,
+        expected_plan_id: expectedPlanId,
+        expected_revision: expectedRevision,
       },
     };
 
