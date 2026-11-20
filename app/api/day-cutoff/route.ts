@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { SETTINGS_ACCESS_COOKIE_NAME, verifySettingsAccessToken } from "@/lib/settings-auth";
 import { signConfigEnvelope, type SignedConfigEnvelope } from "@/lib/config-auth";
+import { isCutoffDate, isCutoffTime } from "@/lib/day-cutoff";
 
 export const runtime = "nodejs";
 
@@ -9,10 +10,6 @@ const CUTOFF_URL = "https://n8n.estyl.team/webhook/mol-auto-plan-day-cutoff";
 
 function respond(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
-}
-
-function validDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 
 async function forward(envelope: SignedConfigEnvelope) {
@@ -35,11 +32,11 @@ export async function GET(request: NextRequest) {
     return respond({ ok: false, error: "unauthorized", message: "Wymagane logowanie." }, 401);
   }
   const date = request.nextUrl.searchParams.get("date") ?? "";
-  if (!validDate(date)) return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowa data." }, 400);
+  if (!isCutoffDate(date)) return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowa data." }, 400);
   try {
     return await forward({ action: "readDayCutoff", issued_at: Date.now(), payload: { date } });
   } catch {
-    return respond({ ok: false, error: "cutoff_unavailable", message: "Nie udało się odczytać skróconego cut-offu." }, 502);
+    return respond({ ok: false, error: "cutoff_unavailable", message: "Nie udało się odczytać cutoffu planistycznego." }, 502);
   }
 }
 
@@ -55,13 +52,21 @@ export async function POST(request: NextRequest) {
     return respond({ ok: false, error: "forbidden", message: "Niedozwolone pochodzenie żądania." }, 403);
   }
   try {
-    const body = await request.json() as { date?: unknown; mode?: unknown; cutoff_local?: unknown };
+    const body = await request.json() as { date?: unknown; scope?: unknown; mode?: unknown; cutoff_local?: unknown };
     const date = typeof body.date === "string" ? body.date : "";
-    const mode = body.mode === "SHORTENED" ? "SHORTENED" : body.mode === "STANDARD" ? "STANDARD" : "";
-    const cutoff = typeof body.cutoff_local === "string" ? body.cutoff_local : null;
-    if (!validDate(date) || !mode) return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowe dane cut-offu." }, 400);
-    return await forward({ action: "setDayCutoff", issued_at: Date.now(), payload: { date, mode, cutoff_local: cutoff } });
+    const scope = body.scope ?? "DATE";
+    const mode = body.mode;
+    const cutoff = body.cutoff_local ?? null;
+    const validDateMode = scope === "DATE" && (
+      (mode === "STANDARD" && cutoff === null)
+      || ((mode === "CUSTOM" || mode === "SHORTENED") && isCutoffTime(cutoff))
+    );
+    const validWeekdayMode = scope === "WEEKDAY_DEFAULT" && mode === "CUSTOM" && isCutoffTime(cutoff);
+    if (!isCutoffDate(date) || (!validDateMode && !validWeekdayMode)) {
+      return respond({ ok: false, error: "invalid_input", message: "Nieprawidłowe dane cutoffu." }, 400);
+    }
+    return await forward({ action: "setDayCutoff", issued_at: Date.now(), payload: { date, scope, mode, cutoff_local: cutoff } });
   } catch {
-    return respond({ ok: false, error: "cutoff_unavailable", message: "Nie udało się zapisać skróconego cut-offu." }, 502);
+    return respond({ ok: false, error: "cutoff_unavailable", message: "Nie udało się zapisać cutoffu planistycznego." }, 502);
   }
 }

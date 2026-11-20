@@ -26,10 +26,10 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
         </div>
       </section>
 
-      {demand.leader_cutoff?.mode === "SHORTENED" && (
+      {demand.leader_cutoff?.mode !== undefined && demand.leader_cutoff.mode !== "STANDARD" && (
         <div className="leader-cutoff-banner" role="status">
-          <b>Skrócony cut-off lidera: {demand.leader_cutoff.cutoff_local}</b>
-          <span>Dzisiejszy target nie uwzględnia późniejszych slotów · wyłączono {formatNumber(demand.leader_cutoff.excluded_orders)} zam.</span>
+          <b>Wyjątek cutoffu planistycznego: {demand.leader_cutoff.cutoff_local}</b>
+          <span>Późniejsze sloty poza planem · {formatNumber(demand.leader_cutoff.excluded_orders)} zam.</span>
         </div>
       )}
       {demand.warnings.length > 0 && <div className="demand-warning" role="status">{demand.warnings.join(" · ")}</div>}
@@ -199,8 +199,8 @@ export function OrdersView({ demand, loading, error }: OrdersViewProps) {
             <div className="section-heading"><div><p className="eyebrow">REGUŁY DNIA</p><h2>Cutoffy kurierów</h2></div></div>
             <div className="cutoff-rule"><b>do 10:00</b><span>wszystkie rozpoznane grupy</span></div>
             <div className="cutoff-rule"><b>10:00–12:00</b><span>bez Allegro One</span></div>
-            <div className="cutoff-rule"><b>12:00–16:00</b><span>InPost / Orlen · wt–pt</span></div>
-            <p className="cutoff-note">Poniedziałek: InPost / Orlen do 12:00. Reguły cutoff nie zostały zmienione w tej poprawce.</p>
+            <div className="cutoff-rule"><b>12:00–16:00</b><span>InPost / Orlen</span></div>
+            <p className="cutoff-note">Cutoff planistyczny dla tej daty: {demand.leader_cutoff?.effective_cutoff_local ?? "—"}.</p>
           </section>
         </aside>
       </div>

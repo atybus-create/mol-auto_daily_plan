@@ -181,7 +181,7 @@ export function WorkPlan({
           <span className="cutoff-title">PUNKTY KONTROLNE</span>
           <span className="cutoff-item"><b>10:00</b> cutoff Allegro One</span>
           <span className="cutoff-item"><b>12:00</b> cutoff pozostałych kurierów</span>
-          <span className="cutoff-item">InPost / Orlen: <b>12:00 pn · 16:00 wt–pt</b></span>
+          <span className="cutoff-item">InPost / Orlen: <b>do 16:00</b></span>
           <span className="cutoff-item"><b>+15 min</b> dopakowanie</span>
         </div>
       </section>

@@ -168,10 +168,12 @@ export type DayDemandV3Snapshot = Omit<DayDemandSnapshot, "slots" | "forecast_ki
 };
 
 export type LeaderCutoffState = {
-  mode: "STANDARD" | "SHORTENED";
+  mode: "STANDARD" | "SHORTENED" | "CUSTOM";
   cutoff_local: string | null;
   changed_at: string | null;
   excluded_orders: number;
+  default_cutoff_local?: string;
+  effective_cutoff_local?: string;
 };
 
 export type OrdersDemandSnapshot = DayDemandV3Snapshot;

@@ -314,7 +314,7 @@ export function PlanDashboard() {
     }
   }
 
-  async function recalculateAfterCutoff() {
+  async function recalculateAfterCutoff(expectedCutoff: string) {
     if (planLoading) throw new Error("Plan jest już przeliczany.");
     latestPlanRequest.current += 1;
     setPlanLoading(true);
@@ -324,6 +324,9 @@ export function PlanDashboard() {
       const freshDemand = await demandResponse.json() as OrdersDemandResponse;
       if (!demandResponse.ok || !freshDemand.ok || freshDemand.status !== "ready") {
         throw new Error(freshDemand.ok ? "DAY DEMAND nie jest gotowy do przeliczenia." : freshDemand.error);
+      }
+      if (freshDemand.contract_version !== 3 || freshDemand.leader_cutoff?.effective_cutoff_local !== expectedCutoff) {
+        throw new Error("Źródło zapotrzebowania nie potwierdziło zapisanej godziny cutoffu.");
       }
       setDemand(freshDemand);
 
@@ -337,8 +340,7 @@ export function PlanDashboard() {
         throw new Error(result.ok ? "Nie udało się przeliczyć planu po zmianie cut-offu." : (result.message || result.error));
       }
       setGeneratedPlan(result);
-      setActiveTab("work");
-      setToast("Skrócony cut-off zapisany. Target, RBH i przyszła część planu zostały przeliczone.");
+      setToast("Przeliczono zapotrzebowanie, RBH i przyszłą część planu.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Nie udało się przeliczyć planu po zmianie cut-offu.";
       setToast(message);
