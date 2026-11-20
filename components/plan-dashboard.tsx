@@ -375,6 +375,8 @@ export function PlanDashboard() {
           trigger_ref: "ui_manual",
           manual_overrides: removeOverrideIds.length ? [] : [override],
           remove_override_ids: removeOverrideIds,
+          expected_plan_id: currentGeneratedPlan.plan_id,
+          expected_revision: currentGeneratedPlan.revision?.version,
         }),
       });
       const result = await response.json() as GeneratedPlanResponse | GeneratedPlanError;
