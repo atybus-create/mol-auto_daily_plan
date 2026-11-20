@@ -285,6 +285,7 @@ export type PlanShortage = {
 };
 
 export type GeneratedPlanSummary = {
+  engine_version?: string;
   target_orders: number;
   pick_target_tasks: number;
   pack_target_orders: number;

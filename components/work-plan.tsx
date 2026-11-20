@@ -92,6 +92,9 @@ export function WorkPlan({
   const packScheduledRbh = planAvailable
     ? sumScheduledRbh(employees, "pack")
     : null;
+  const usesV7 = planSummary?.engine_version === "V7_RELEASE_FLOW";
+  const pickUncoveredRbh = usesV7 ? planSummary.final_pick_remaining / norms.pick_per_hour : null;
+  const packUncoveredRbh = usesV7 ? planSummary.final_pack_remaining / norms.pack_per_hour : null;
 
   return (
     <section id="work-panel" className="tab-panel" role="tabpanel" aria-labelledby="tab-work">
@@ -126,11 +129,13 @@ export function WorkPlan({
           process="PICK"
           demand={pickDemandRbh}
           scheduled={pickScheduledRbh}
+          uncovered={pickUncoveredRbh}
         />
         <RbhDemandCard
           process="PAK"
           demand={packDemandRbh}
           scheduled={packScheduledRbh}
+          uncovered={packUncoveredRbh}
         />
       </section>
 
@@ -178,11 +183,10 @@ export function WorkPlan({
           onBlockClick={onBlockClick}
         />
         <div className="cutoff-strip">
-          <span className="cutoff-title">PUNKTY KONTROLNE</span>
-          <span className="cutoff-item"><b>10:00</b> cutoff Allegro One</span>
-          <span className="cutoff-item"><b>12:00</b> cutoff pozostałych kurierów</span>
-          <span className="cutoff-item">InPost / Orlen: <b>do 16:00</b></span>
-          <span className="cutoff-item"><b>+15 min</b> dopakowanie</span>
+          <span className="cutoff-title">ZAKOŃCZENIE PAK</span>
+          <span className="cutoff-item">Allegro One <b>10:15</b></span>
+          <span className="cutoff-item">Pozostali kurierzy <b>12:15</b></span>
+          <span className="cutoff-item">InPost / Orlen Paczka <b>17:00</b></span>
         </div>
       </section>
 
@@ -369,9 +373,15 @@ function sumScheduledRbh(employees: Employee[], kind: "pick" | "pack") {
   return minutes / 60;
 }
 
-function RbhDemandCard({ process, demand, scheduled }: { process: "PICK" | "PAK"; demand: number | null; scheduled: number | null }) {
+function RbhDemandCard({ process, demand, scheduled, uncovered }: {
+  process: "PICK" | "PAK";
+  demand: number | null;
+  scheduled: number | null;
+  uncovered: number | null;
+}) {
   const balance = demand !== null && scheduled !== null ? scheduled - demand : null;
-  const covered = balance !== null && balance >= 0;
+  const coverage = uncovered === null ? balance : -uncovered;
+  const covered = coverage !== null && coverage >= 0;
 
   return (
     <section className={`rbh-demand-card ${process.toLowerCase()}`}>
@@ -388,11 +398,16 @@ function RbhDemandCard({ process, demand, scheduled }: { process: "PICK" | "PAK"
           <small>Rozpisane</small>
           <strong>{formatRbh(scheduled)}</strong>
         </div>
-        <div className={balance === null ? undefined : covered ? "rbh-balance-covered" : "rbh-balance-shortage"}>
-          <small>Bilans</small>
-          <strong>{formatRbhSigned(balance)}</strong>
+        <div className={coverage === null ? undefined : covered ? "rbh-balance-covered" : "rbh-balance-shortage"}>
+          <small>{uncovered === null ? "Bilans" : "Brak po obsadzie"}</small>
+          <strong>{uncovered === null ? formatRbhSigned(balance) : formatRbh(uncovered)}</strong>
         </div>
       </div>
+      {uncovered !== null && (
+        <div className="orders-table-note" title="Różnica między godzinami rozpisanymi na cały dzień a zapotrzebowaniem według normy.">
+          <span>Bilans normy całego dnia {formatRbhSigned(balance)}</span>
+        </div>
+      )}
     </section>
   );
 }
